@@ -14,7 +14,7 @@ mod utils;
 
 fn main() {
 
-    let mut board = Board::new_pawn_game();
+    let mut board = Board::new_classic_game();
 
     let mut rng = rand::thread_rng();
 
@@ -31,12 +31,12 @@ fn main() {
         //     break;
         // }
         // let m = moves[0];
-        let m = board.search(6, Move::evaluate(-i64::MAX), Move::evaluate(i64::MAX), false);
+        let m = board.search(7, Move::evaluate(-i64::MAX), Move::evaluate(i64::MAX), false);
         if !m.is_valid() {
             break;
         }
         println!("Evaluation: {}", m.evaluation());
-        stdin().read_line(&mut buffer);
+        // stdin().read_line(&mut buffer);
         board.push_move(m);
     }
     print!("{esc}[2J{esc}[1;1H", esc = 27 as char);

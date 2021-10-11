@@ -59,9 +59,28 @@ impl Piece {
                     Color::White => (10*self.position.y as i64),
                     Color::Black => 10*(7-self.position.y as i64)
                 };
-                50*v/(1+v)
+                v
+                //50*v/(1+v)
             },
-            _ => 0
+            Type::Rook => {
+                let v = match self.color {
+                    Color::White => {
+                        if self.position.y == 6 {
+                            100
+                        } else {
+                            0
+                        }
+                    },
+                    Color::Black => {
+                        if self.position.y == 1 {
+                            100
+                        } else {
+                            0
+                        }
+                    }
+                };
+                v
+            }
         };
 
         self.base_value() + pos_value

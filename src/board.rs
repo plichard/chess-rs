@@ -133,6 +133,15 @@ impl Board {
         }
     }
 
+    pub fn new_promote_game() -> Self {
+        let mut game = Board::new_empty_game();
+
+        game.add_new_piece(Color::White, Type::Pawn, 0, 1);
+        game.add_new_piece(Color::Black, Type::Pawn, 7, 6);
+
+        game
+    }
+
     pub fn new_classic_game() -> Self {
         let mut game = Board::new_pawn_game();
 
@@ -363,11 +372,11 @@ impl Board {
                 }
 
                 // promotes
-                // if piece.position.y == 6 {
-                //     if let None = self.piece_at(&piece.position.up(1).unwrap()) {
-                //         moves.push(Move::promote_piece(*piece, piece.position.up(1).unwrap(), Type::Rook))
-                //     }
-                // }
+                if piece.position.y == 6 {
+                    if let None = self.piece_at(&piece.position.up(1).unwrap()) {
+                        moves.push(Move::promote_piece(*piece, piece.position.up(1).unwrap(), Type::Rook))
+                    }
+                }
 
                 if !only_captures {
                     if let Some(position) = piece.position.up(1) {
@@ -417,11 +426,11 @@ impl Board {
                 }
 
                 // promotes
-                // if piece.position.y == 1 {
-                //     if let None = self.piece_at(&piece.position.down(1).unwrap()) {
-                //         moves.push(Move::promote_piece(*piece, piece.position.down(1).unwrap(), Type::Rook))
-                //     }
-                // }
+                if piece.position.y == 1 {
+                    if let None = self.piece_at(&piece.position.down(1).unwrap()) {
+                        moves.push(Move::promote_piece(*piece, piece.position.down(1).unwrap(), Type::Rook))
+                    }
+                }
 
                 if !only_captures {
                     if let Some(position) = piece.position.down(1) {

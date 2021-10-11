@@ -28,6 +28,22 @@ impl Position {
         }
     }
 
+    pub fn left(&self, n: i8) -> Option<Self> {
+        if self.x >= n {
+            Some(Position::new(self.x - n, self.y))
+        } else {
+            None
+        }
+    }
+
+    pub fn right(&self, n: i8) -> Option<Self> {
+        if self.x < 7 - n + 1{
+            Some(Position::new(self.x + n, self.y))
+        } else {
+            None
+        }
+    }
+
     pub fn up_left(&self, n: i8) -> Option<Self> {
         if self.y < 7 - n + 1 && self.x >= n {
             Some(Position::new(self.x - n, self.y + n))

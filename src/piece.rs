@@ -6,14 +6,14 @@ pub enum Color {
     Black
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Type {
     Pawn,
     // Bishop,
     // Knight,
     Rook,
     // Queen,
-    // King
+    King
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -33,6 +33,8 @@ impl Piece {
             (Black, Pawn) => 'p',
             (White, Rook) => 'R',
             (Black, Rook) => 'r',
+            (White, King) => 'K',
+            (Black, King) => 'k',
         }
     }
 
@@ -49,6 +51,7 @@ impl Piece {
         match self.t {
             Type::Pawn => 1000,
             Type::Rook => 5000,
+            Type::King => 100000,
         }
     }
 
@@ -80,7 +83,8 @@ impl Piece {
                     }
                 };
                 v
-            }
+            },
+            Type::King => 0,
         };
 
         self.base_value() + pos_value

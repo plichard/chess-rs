@@ -184,6 +184,27 @@ impl Board {
         game.add_new_piece(Color::Black, Type::Rook, 0, 7);
         game.add_new_piece(Color::Black, Type::Rook, 7, 7);
 
+        game.add_new_piece(Color::White, Type::King, 4, 0);
+        game.add_new_piece(Color::Black, Type::King, 4, 7);
+
+        game
+    }
+
+    pub fn new_win_game() -> Self {
+        let mut game = Board::new_empty_game();
+        game.add_new_piece(Color::White, Type::Rook, 0, 0);
+        game.add_new_piece(Color::White, Type::Rook, 1, 0);
+        game.add_new_piece(Color::White, Type::Rook, 2, 0);
+
+        game.add_new_piece(Color::Black, Type::Rook, 5, 0);
+        game.add_new_piece(Color::Black, Type::Rook, 5, 1);
+        game.add_new_piece(Color::Black, Type::Rook, 5, 2);
+
+        game.add_new_piece(Color::White, Type::King, 0, 7);
+        game.add_new_piece(Color::Black, Type::King, 7, 5);
+
+
+
         game
     }
 
@@ -247,6 +268,12 @@ impl Board {
     }
 
     pub fn search(&mut self, depth: i32, mut alpha: Move, beta: Move, parent: &mut MoveNode, only_captures: bool) -> Move {
+        if let Action::Take { to, .. } = parent.m.action {
+            if to.t == Type::King {
+                return Move::evaluate(self.evaluate_position()).into();
+            }
+        }
+
         if depth == 0 && !only_captures{
             // return Move::evaluate(self.evaluate_position());
             return self.search(depth - 1, alpha, beta, parent, true);
@@ -323,8 +350,8 @@ impl Board {
             }
             sum
         };
-        let black_value = if black_value != 0 {black_value} else {-100000};
-        let white_value = if white_value != 0 {white_value} else {-100000};
+        // let black_value = if black_value != 0 {black_value} else {-100000};
+        // let white_value = if white_value != 0 {white_value} else {-100000};
 
         let perspective = if self.current_color() == Color::White {1}else{-1};
         (white_value - black_value)*perspective
@@ -349,7 +376,51 @@ impl Board {
     pub fn append_piece_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
         match piece.t {
             Type::Pawn => self.append_pawn_moves(&piece, moves, only_captures),
-            Type::Rook => self.append_rook_moves(&piece, moves, only_captures)
+            Type::Rook => self.append_rook_moves(&piece, moves, only_captures),
+            Type::King => self.append_king_moves(&piece, moves, only_captures)
+        }
+    }
+
+    pub fn append_king_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
+        let mut try_position = |position| {
+            if let Some(target) = self.piece_at(&position) {
+                if target.color != piece.color {
+                    moves.push(Move::take_piece(*piece, *target).into());
+                }
+            } else {
+                moves.push(Move::move_piece(*piece, position).into());
+            }
+        };
+        if let Some(position) = piece.position.left(1) {
+            try_position(position);
+        }
+
+        if let Some(position) = piece.position.up_left(1) {
+            try_position(position);
+        }
+
+        if let Some(position) = piece.position.up(1) {
+            try_position(position);
+        }
+
+        if let Some(position) = piece.position.up_right(1) {
+            try_position(position);
+        }
+
+        if let Some(position) = piece.position.right(1) {
+            try_position(position);
+        }
+
+        if let Some(position) = piece.position.down_right(1) {
+            try_position(position);
+        }
+
+        if let Some(position) = piece.position.down(1) {
+            try_position(position);
+        }
+
+        if let Some(position) = piece.position.down_left(1) {
+            try_position(position);
         }
     }
 

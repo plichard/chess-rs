@@ -11,23 +11,9 @@ pub enum Type {
     Pawn,
     // Bishop,
     // Knight,
-    // Rook,
+    Rook,
     // Queen,
     // King
-}
-
-impl Type {
-    pub fn value(&self) -> i64 {
-        match self {
-            Type::Pawn => 1,
-        }
-    }
-
-    pub fn name(&self) -> &str {
-        match self {
-            Type::Pawn => "Pawn"
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug)]
@@ -43,8 +29,41 @@ impl Piece {
         use Color::*;
         use Type::*;
         match (self.color, self.t) {
-            (White, Pawn) => '\u{2659}',
-            (Black, Pawn) => '\u{265F}'
+            (White, Pawn) => 'P',
+            (Black, Pawn) => 'p',
+            (White, Rook) => 'R',
+            (Black, Rook) => 'r',
         }
+    }
+
+    pub fn moved(&self, position: Position) -> Self {
+        Self {
+            t: self.t,
+            position,
+            color: self.color,
+            index: self.index
+        }
+    }
+
+    pub fn base_value(&self) -> i64 {
+        match self.t {
+            Type::Pawn => 1000,
+            Type::Rook => 5000,
+        }
+    }
+
+    pub fn value(&self) -> i64 {
+        let pos_value = match self.t {
+            Type::Pawn => {
+                let v = match self.color {
+                    Color::White => (10*self.position.y as i64),
+                    Color::Black => 10*(7-self.position.y as i64)
+                };
+                50*v/(1+v)
+            },
+            _ => 0
+        };
+
+        self.base_value() + pos_value
     }
 }

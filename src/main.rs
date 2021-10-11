@@ -1,9 +1,10 @@
-use crate::board::{Board, Move};
+use crate::board::{Board, Move, Action};
 use crate::piece::Color;
 use rand::Rng;
 use std::cmp::Ordering;
 use std::error::Error;
 use std::io;
+use std::io::stdin;
 use std::mem::size_of;
 
 mod board;
@@ -17,36 +18,38 @@ fn main() {
 
     let mut rng = rand::thread_rng();
 
-
-
     // draw_board(&mut terminal, board.clone());
 
-    std::thread::sleep_ms(1000);
-
-
+    // std::thread::sleep_ms(1000);
+    let mut buffer = String::new();
     // let mut i = 0;
-    // board.print();
-    for _ in 0..100 {
-        loop {
-            let mut moves = board.collect_all_moves(board.current_color());
-            if moves.is_empty() {
-                break;
-            }
-            // board.sort_moves(&mut moves);
-            board.push_move(moves[rng.gen_range(0..moves.len())]);
-            // i += 1;
-            // board.print();
-            // std::thread::sleep_ms(50);
+    loop {
+        print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
+        board.print();
+        // let moves = board.collect_all_moves(board.current_color(), false);
+        // if moves.is_empty() {
+        //     break;
+        // }
+        // let m = moves[0];
+        let m = board.search(6, Move::evaluate(-i64::MAX), Move::evaluate(i64::MAX), false);
+        if !m.is_valid() {
+            break;
         }
-
-        // println!("Executed {} moves", i);
-
-        while board.depth() > 0 {
-            board.pop_move();
-            // board.print();
-            // std::thread::sleep_ms(50);
-        }
+        println!("Evaluation: {}", m.evaluation());
+        stdin().read_line(&mut buffer);
+        board.push_move(m);
     }
-
+    print!("{esc}[2J{esc}[1;1H", esc = 27 as char);
     board.print();
+
+    // println!("Executed {} moves", i);
+
+    // while board.depth() > 0 {
+    //     board.pop_move();
+    //     board.print();
+    //     std::thread::sleep_ms(50);
+    // }
+
+
+    // board.print();
 }

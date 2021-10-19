@@ -16,15 +16,33 @@ pub enum Type {
     King
 }
 
-#[derive(Copy, Clone, Debug)]
-pub struct Piece {
+#[derive(Debug)]
+pub struct PieceData {
     pub t: Type,
     pub position: Position,
-    pub color: Color,
-    pub index: u8
+}
+
+#[derive(Debug)]
+pub enum Piece {
+    Unused,
+    Placed(PieceData),
+    Captured(PieceData)
 }
 
 impl Piece {
+    fn captured(self) -> Self {
+        let Piece::Placed(data) = self;
+        Piece::Captured(data)
+    }
+
+    fn uncaptured(self) -> Self {
+        let Piece::Captured(data) = self;
+        Piece::Placed(data)
+    }
+}
+
+
+impl PieceData {
     pub fn character(&self) -> char {
         use Color::*;
         use Type::*;
@@ -42,8 +60,6 @@ impl Piece {
         Self {
             t: self.t,
             position,
-            color: self.color,
-            index: self.index
         }
     }
 

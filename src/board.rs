@@ -1,13 +1,16 @@
-use crate::piece::{Color, Piece, Type};
+use crate::piece::{Color, Piece, PieceData, Type};
 use crate::utils::Position;
 use std::cmp::Ordering;
 use termcolor::{ColorChoice, ColorSpec, WriteColor};
 use std::io::Write;
 use std::ops::Neg;
+use ux::i4;
+
+type PieceID = i4;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Move {
-    evaluation: i64,
+    score: i16,
     action: Action,
 }
 
@@ -36,15 +39,13 @@ impl MoveNode {
 #[derive(Copy, Clone, Debug)]
 pub enum Action {
     EvaluatePosition,
-    Move { from: Piece, to: Piece },
-    Take { from: Piece, to: Piece},
-    Promote{from: Piece, to: Piece},
-    // TakeAndPromote{target: PieceID, from: Piece, to: Piece}
+    Move { from: Position, to: Position },  // after a Move, if the target was another piece, execute the next Action as well
+    Capture { id: PieceID },
 }
 
 impl Move {
     pub fn value(&self) -> i64 {
-        match self.action {
+        match &self.action {
             Action::EvaluatePosition => self.evaluation,
             Action::Move { from, to } => to.value() - from.value(),
             Action::Take { from, to } => to.value() * 10 - from.value(),
@@ -128,13 +129,13 @@ impl Neg for MoveNode {
 
 #[derive(Clone)]
 pub struct Board {
-    white_pieces: [Option<Piece>; 16],
-    black_pieces: [Option<Piece>; 16],
+    white_pieces: [Piece; 16],
+    black_pieces: [Piece; 16],
 
     used_white_pieces: usize,
     used_black_pieces: usize,
 
-    cells: [[Option<Piece>; 8]; 8],
+    cells: [Option<PieceID>; 64],
     move_stack: Vec<Move>,
 
     green: ColorSpec,
@@ -153,9 +154,9 @@ impl Board {
         red.set_fg(Some(termcolor::Color::Red));
 
         Self {
-            white_pieces: [None; 16],
-            black_pieces: [None; 16],
-            cells: [[None; 8]; 8],
+            white_pieces: [Piece::Unused; 16],
+            black_pieces: [Piece::Unused; 16],
+            cells: [None; 64],
             move_stack: Vec::new(),
             green,
             red,
@@ -164,6 +165,10 @@ impl Board {
             white_piece_count: 0,
             black_piece_count: 0
         }
+    }
+
+    fn move_value(&self, m: &Move) -> i16 {
+
     }
 
     pub fn new_promote_game() -> Self {
@@ -245,6 +250,9 @@ impl Board {
     }
 
     pub fn add_new_piece(&mut self, color: Color, t: Type, x: i8, y: i8) {
+        let x = i4::new(x);
+        let y = i4::new(y);
+
         if color == Color::White {
             self.white_pieces[self.used_white_pieces] = Some(Piece{
                 t,

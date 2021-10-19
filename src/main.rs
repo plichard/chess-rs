@@ -14,6 +14,10 @@ mod utils;
 
 fn main() {
 
+    println!("sizeof Move: {}", std::mem::size_of::<board::Move>());
+
+    return;
+
     let mut board = Board::new_classic_game();
 
     let mut rng = rand::thread_rng();
@@ -32,7 +36,7 @@ fn main() {
         // }
         // let m = moves[0];
         let mut root_node : MoveNode = Move::evaluate(0).into();
-        let m = board.search(8, Move::evaluate(-i64::MAX).into(), Move::evaluate(i64::MAX).into(), &mut root_node, false);
+        let m = board.search(10, Move::evaluate(-i64::MAX).into(), Move::evaluate(i64::MAX).into(), &mut root_node, false);
         if !m.is_valid() {
             break;
         }

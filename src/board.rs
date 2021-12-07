@@ -5,6 +5,7 @@ use termcolor::{ColorChoice, ColorSpec, WriteColor};
 use std::io::Write;
 use std::ops::{Neg, Shl};
 use std::process::Output;
+use rand::rngs::ThreadRng;
 
 
 #[derive(Copy, Clone, Debug)]
@@ -136,7 +137,7 @@ pub struct Board {
     red: ColorSpec,
 
     white_piece_count: i8,
-    black_piece_count: i8
+    black_piece_count: i8,
 }
 
 impl Board {
@@ -158,7 +159,7 @@ impl Board {
             used_white_pieces: 0,
 
             white_piece_count: 0,
-            black_piece_count: 0
+            black_piece_count: 0,
         }
     }
 
@@ -182,6 +183,15 @@ impl Board {
 
         game.add_new_piece(Color::White, Type::King, 4, 0);
         game.add_new_piece(Color::Black, Type::King, 4, 7);
+
+        game.add_new_piece(Color::White, Type::Queen, 3, 0);
+        game.add_new_piece(Color::Black, Type::Queen, 3, 7);
+
+        game.add_new_piece(Color::White, Type::Bishop, 2, 0);
+        game.add_new_piece(Color::White, Type::Bishop, 5, 0);
+
+        game.add_new_piece(Color::Black, Type::Bishop, 2, 7);
+        game.add_new_piece(Color::Black, Type::Bishop, 5, 7);
 
         game
     }
@@ -410,6 +420,10 @@ impl Board {
             Type::Rook => self.append_rook_moves(&piece, moves, only_captures),
             Type::Bishop => self.append_bishop_moves(&piece, moves, only_captures),
             Type::King => self.append_king_moves(&piece, moves, only_captures),
+            Type::Queen => {
+                self.append_rook_moves(&piece, moves, only_captures);
+                self.append_bishop_moves(&piece, moves, only_captures);
+            }
         }
     }
 
@@ -503,47 +517,59 @@ impl Board {
     }
 
     pub fn append_bishop_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
-        for n in 1..min(piece.position.x, piece.position.y) {
-            if let Some(target) = self.piece_at(&Position::new(x, piece.position.y)) {
+        // up - right
+        for n in 1..i8::min(7 - piece.position.x, 7 - piece.position.y) {
+            let x = piece.position.x + n;
+            let y = piece.position.y + n;
+            if let Some(target) = self.piece_at(&Position::new(x, y)) {
                 if target.color != piece.color {
                     moves.push(Move::capture_piece(*piece, *target).into());
                 }
                 break;
             } else if !only_captures {
-                moves.push(Move::move_piece(*piece, Position::new(x, piece.position.y)).into());
+                moves.push(Move::move_piece(*piece, Position::new(x, y)).into());
             }
         }
 
-        for x in (0..piece.position.x).rev() {
-            if let Some(target) = self.piece_at(&Position::new(x, piece.position.y)) {
-                if target.color != piece.color {
-                    moves.push(Move::capture_piece(*piece, *target).into());
-                }
-                break;
-            } else if !only_captures{
-                moves.push(Move::move_piece(*piece, Position::new(x, piece.position.y)).into());
-            }
-        }
-
-        for y in piece.position.y+1..=7 {
-            if let Some(target) = self.piece_at(&Position::new(piece.position.x, y)) {
-                if target.color != piece.color {
-                    moves.push(Move::capture_piece(*piece, *target).into());
-                }
-                break;
-            } else if !only_captures{
-                moves.push(Move::move_piece(*piece, Position::new(piece.position.x, y)).into());
-            }
-        }
-
-        for y in (0..piece.position.y).rev() {
-            if let Some(target) = self.piece_at(&Position::new(piece.position.x, y)) {
+        // up - left
+        for n in 1..i8::min(piece.position.x, 7 - piece.position.y) {
+            let x = piece.position.x - n;
+            let y = piece.position.y + n;
+            if let Some(target) = self.piece_at(&Position::new(x, y)) {
                 if target.color != piece.color {
                     moves.push(Move::capture_piece(*piece, *target).into());
                 }
                 break;
             } else if !only_captures {
-                moves.push(Move::move_piece(*piece, Position::new(piece.position.x, y)).into());
+                moves.push(Move::move_piece(*piece, Position::new(x, y)).into());
+            }
+        }
+
+        // down - left
+        for n in 1..i8::min(piece.position.x, piece.position.y) {
+            let x = piece.position.x - n;
+            let y = piece.position.y - n;
+            if let Some(target) = self.piece_at(&Position::new(x, y)) {
+                if target.color != piece.color {
+                    moves.push(Move::capture_piece(*piece, *target).into());
+                }
+                break;
+            } else if !only_captures {
+                moves.push(Move::move_piece(*piece, Position::new(x, y)).into());
+            }
+        }
+
+        // down - right
+        for n in 1..i8::min(7 - piece.position.x, piece.position.y) {
+            let x = piece.position.x + n;
+            let y = piece.position.y - n;
+            if let Some(target) = self.piece_at(&Position::new(x, y)) {
+                if target.color != piece.color {
+                    moves.push(Move::capture_piece(*piece, *target).into());
+                }
+                break;
+            } else if !only_captures {
+                moves.push(Move::move_piece(*piece, Position::new(x, y)).into());
             }
         }
     }

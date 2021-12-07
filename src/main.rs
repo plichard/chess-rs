@@ -34,7 +34,7 @@ fn main() {
         // }
         // let m = moves[0];
         let mut root_node : MoveNode = Move::evaluate(0).into();
-        let m = board.search(6, Move::evaluate(-i32::MAX).into(), Move::evaluate(i32::MAX).into(), &mut root_node, false);
+        let m = board.search(5, Move::evaluate(-i32::MAX).into(), Move::evaluate(i32::MAX).into(), &mut root_node, false);
         if !m.is_valid() {
             break;
         }

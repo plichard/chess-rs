@@ -12,7 +12,7 @@ pub enum Type {
     Bishop,
     // Knight,
     Rook,
-    // Queen,
+    Queen,
     King
 }
 
@@ -39,6 +39,8 @@ impl Piece {
             (Black, King) => "k",
             (White, Bishop) => "B",
             (Black, Bishop) => "b",
+            (White, Queen) => "Q",
+            (Black, Queen) => "q",
         }
     }
 
@@ -54,7 +56,9 @@ impl Piece {
     pub fn base_value(&self) -> i32 {
         match self.t {
             Type::Pawn => 1000,
+            Type::Bishop => 3000,
             Type::Rook => 5000,
+            Type::Queen => 9000,
             Type::King => 100000,
         }
     }
@@ -95,6 +99,10 @@ impl Piece {
                 };
                 v
             },
+            Type::Bishop => {
+                0
+            },
+            Type::Queen => 0,
         };
 
         self.base_value() + pos_value

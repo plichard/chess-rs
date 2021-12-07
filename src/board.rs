@@ -1,16 +1,15 @@
-use crate::piece::{Color, Piece, PieceData, Type};
+use crate::piece::{Color, Piece, PieceIndex, Type};
 use crate::utils::Position;
 use std::cmp::Ordering;
 use termcolor::{ColorChoice, ColorSpec, WriteColor};
 use std::io::Write;
-use std::ops::Neg;
-use ux::i4;
+use std::ops::{Neg, Shl};
+use std::process::Output;
 
-type PieceID = i4;
 
 #[derive(Copy, Clone, Debug)]
 pub struct Move {
-    score: i16,
+    score: i32,
     action: Action,
 }
 
@@ -38,104 +37,99 @@ impl MoveNode {
 
 #[derive(Copy, Clone, Debug)]
 pub enum Action {
-    EvaluatePosition,
-    Move { from: Position, to: Position },  // after a Move, if the target was another piece, execute the next Action as well
-    Capture { id: PieceID },
-}
-
-impl Move {
-    pub fn value(&self) -> i64 {
-        match &self.action {
-            Action::EvaluatePosition => self.evaluation,
-            Action::Move { from, to } => to.value() - from.value(),
-            Action::Take { from, to } => to.value() * 10 - from.value(),
-            Action::Promote {to, ..} => to.value()
-        }
-    }
-
-    pub fn evaluate(evaluation: i64) -> Self {
-        Self {
-            evaluation,
-            action: Action::EvaluatePosition
-        }
-    }
-
-    pub fn take_piece(from: Piece, to: Piece) -> Self {
-        Self {
-            evaluation: 0,
-            action: Action::Take {from, to}
-        }
-    }
-
-    pub fn move_piece(from: Piece, to: Position) -> Self {
-        let piece = Piece {
-            t: from.t,
-            position: to,
-            color: from.color,
-            index: from.index
-        };
-        Self {
-            evaluation: 0,
-            action: Action::Move {from, to: piece}
-        }
-    }
-
-    pub fn promote_piece(from: Piece, to: Position, t: Type) -> Self {
-        let piece = Piece {
-            t,
-            position: to,
-            color: from.color,
-            index: from.index
-        };
-        Self {
-            evaluation: 0,
-            action: Action::Promote {from, to: piece}
-        }
-    }
-
-    pub fn is_valid(&self) -> bool {
-        match self.action {
-            Action::EvaluatePosition => false,
-            _ => true
-        }
-    }
-
-    pub fn evaluation(&self) -> i64 {
-        self.evaluation
-    }
+    Evaluation {score: i32},
+    Move { from: Piece, to: Piece },
+    Capture { piece: Piece, target: Piece },
+    Promote { old_piece: Piece, new_piece: Piece},
 }
 
 impl Neg for Move {
     type Output = Move;
 
     fn neg(self) -> Self::Output {
-        Self {
-            action: self.action,
-            evaluation: -self.evaluation
+        Self::Output {
+            score: -self.score,
+            action: self.action
         }
     }
 }
 
-impl Neg for MoveNode {
-    type Output = MoveNode;
+impl Move {
+    pub fn value(&self) -> i32 {
+        match self.action {
+            Action::Move { .. } => 0,
+            Action::Capture { piece, target } => target.value()*10 - piece.value(),
+            Action::Evaluation { score} => score,
+            Action::Promote { new_piece , ..} => new_piece.value()*10,
+        }
+    }
 
-    fn neg(self) -> Self::Output {
-        Self::Output {
-            m: -self.m,
-            children: self.children
+    pub fn evaluate(score: i32
+    ) -> Self {
+        Self {
+            score,
+            action: Action::Evaluation {score}
+        }
+    }
+
+    pub fn capture_piece(piece: Piece, target: Piece) -> Self {
+        Self {
+            score: 0,
+            action: Action::Capture {piece, target}
+        }
+    }
+
+    pub fn move_piece(piece: Piece, to: Position) -> Self {
+        Self {
+            score: 0,
+            action: Action::Move {from: piece, to: piece.moved(to)}
+        }
+    }
+
+    pub fn promote(piece: Piece, to: Position, t: Type) -> Self {
+        Self {
+            score: 0,
+            action: Action::Promote {
+                old_piece: piece,
+                new_piece: Piece {
+                    t,
+                    position: to,
+                    index: piece.index,
+                    color: piece.color
+                }
+            }
+        }
+    }
+
+    // pub fn promote_piece(from: Piece, to: Position, t: Type) -> Self {
+    //     let piece = Piece {
+    //         t,
+    //         position: to,
+    //         color: from.color,
+    //         index: from.index
+    //     };
+    //     Self {
+    //         evaluation: 0,
+    //         action: Action::Promote {from, to: piece}
+    //     }
+    // }
+
+    pub fn is_valid(&self) -> bool {
+        match self.action {
+            _ => true
         }
     }
 }
 
 #[derive(Clone)]
 pub struct Board {
-    white_pieces: [Piece; 16],
-    black_pieces: [Piece; 16],
+    white_pieces: [Option<Piece>; 16],
+    black_pieces: [Option<Piece>; 16],
 
     used_white_pieces: usize,
     used_black_pieces: usize,
 
-    cells: [Option<PieceID>; 64],
+    cells: [[Option<Piece>; 8]; 8],
     move_stack: Vec<Move>,
 
     green: ColorSpec,
@@ -154,21 +148,18 @@ impl Board {
         red.set_fg(Some(termcolor::Color::Red));
 
         Self {
-            white_pieces: [Piece::Unused; 16],
-            black_pieces: [Piece::Unused; 16],
-            cells: [None; 64],
+            white_pieces: [None; 16],
+            black_pieces: [None; 16],
+            cells: [[None; 8]; 8],
             move_stack: Vec::new(),
             green,
             red,
             used_black_pieces: 0,
             used_white_pieces: 0,
+
             white_piece_count: 0,
             black_piece_count: 0
         }
-    }
-
-    fn move_value(&self, m: &Move) -> i16 {
-
     }
 
     pub fn new_promote_game() -> Self {
@@ -250,8 +241,6 @@ impl Board {
     }
 
     pub fn add_new_piece(&mut self, color: Color, t: Type, x: i8, y: i8) {
-        let x = i4::new(x);
-        let y = i4::new(y);
 
         if color == Color::White {
             self.white_pieces[self.used_white_pieces] = Some(Piece{
@@ -276,9 +265,9 @@ impl Board {
     }
 
     pub fn search(&mut self, depth: i32, mut alpha: Move, beta: Move, parent: &mut MoveNode, only_captures: bool) -> Move {
-        if let Action::Take { to, .. } = parent.m.action {
-            if to.t == Type::King {
-                return Move::evaluate(self.evaluate_position()).into();
+        if let Action::Capture { target, .. } = &parent.m.action {
+            if target.t == Type::King {
+                return Move::evaluate(self.evaluate_position());
             }
         }
 
@@ -287,13 +276,18 @@ impl Board {
             return self.search(depth - 1, alpha, beta, parent, true);
         }
 
-        if only_captures && depth < 20 {
-            return Move::evaluate(self.evaluate_position()).into();
+        // if depth == 0 {
+        //     return Move::evaluate(self.evaluate_position());
+        // }
+
+        if only_captures && depth < -20 {
+            // return Move{ score: 0, action: Action::Evaluation {score: self.evaluate_position()}};
+            return Move::evaluate(self.evaluate_position());
         }
 
         let mut moves = self.collect_all_moves(self.current_color(), only_captures);
         if moves.is_empty() {
-            return Move::evaluate(self.evaluate_position()).into();
+            return Move::evaluate(self.evaluate_position());
         }
 
         self.sort_moves(&mut moves);
@@ -305,14 +299,14 @@ impl Board {
             // println!("test move: {}", test_move.evaluation);
             self.pop_move();
 
-            if test_move.evaluation >= beta.evaluation {
+            if test_move.score >= beta.score {
                 // println!("Pruning");
                 return beta;
             }
 
-            if test_move.evaluation > alpha.evaluation {
+            if test_move.score > alpha.score {
                 alpha = m.m;
-                alpha.evaluation = test_move.evaluation;
+                alpha.score = test_move.score;
             }
         }
 
@@ -339,9 +333,9 @@ impl Board {
         &self.cells[position.x as usize][position.y as usize]
     }
 
-    pub fn evaluate_position(&self) -> i64 {
+    pub fn evaluate_position(&self) -> i32 {
         let black_value = {
-            let mut sum: i64 = 0;
+            let mut sum: i32 = 0;
             for piece in self.black_pieces {
                 if let Some(piece) = piece {
                     sum += piece.value();
@@ -350,7 +344,7 @@ impl Board {
             sum
         };
         let white_value = {
-            let mut sum: i64 = 0;
+            let mut sum: i32 = 0;
             for piece in self.white_pieces {
                 if let Some(piece) = piece {
                     sum += piece.value();
@@ -363,6 +357,35 @@ impl Board {
 
         let perspective = if self.current_color() == Color::White {1}else{-1};
         (white_value - black_value)*perspective
+    }
+
+
+    // black or white: 2 values -> 1 bit
+    // nothing, pawn, rook, knight, bishop, queen, king: 7 values -> 3 bits
+    // 4 bits per cell, 64*4 = 256 bits total per board position
+    pub fn position_hash(&self) -> (u64, u64, u64, u64) {
+
+        let hash = |rows: &[[Option<Piece>; 8]]| {
+            let mut value : u64 = 0;
+            for row in rows {
+                for cell in row {
+                    value <<= 4;
+                    value *= 2 << 4;
+                    if let Some(piece) = &cell {
+                        value += if piece.color == Color::White {1} else {0};
+                        value += piece.t as u64;
+                    }
+                }
+            }
+            value
+        };
+
+        let v1 = hash(&self.cells[0..2]);
+        let v2 = hash(&self.cells[0..4]);
+        let v3 = hash(&self.cells[0..6]);
+        let v4 = hash(&self.cells[0..8]);
+
+        (v1,v2,v3,v4)
     }
 
     pub fn collect_all_moves(&self, color: Color, only_captures: bool) -> Vec<MoveNode> {
@@ -385,7 +408,8 @@ impl Board {
         match piece.t {
             Type::Pawn => self.append_pawn_moves(&piece, moves, only_captures),
             Type::Rook => self.append_rook_moves(&piece, moves, only_captures),
-            Type::King => self.append_king_moves(&piece, moves, only_captures)
+            Type::Bishop => self.append_bishop_moves(&piece, moves, only_captures),
+            Type::King => self.append_king_moves(&piece, moves, only_captures),
         }
     }
 
@@ -393,9 +417,9 @@ impl Board {
         let mut try_position = |position| {
             if let Some(target) = self.piece_at(&position) {
                 if target.color != piece.color {
-                    moves.push(Move::take_piece(*piece, *target).into());
+                    moves.push(Move::capture_piece(*piece, *target).into());
                 }
-            } else {
+            } else if !only_captures {
                 moves.push(Move::move_piece(*piece, position).into());
             }
         };
@@ -436,10 +460,10 @@ impl Board {
         for x in piece.position.x+1..=7 {
             if let Some(target) = self.piece_at(&Position::new(x, piece.position.y)) {
                 if target.color != piece.color {
-                    moves.push(Move::take_piece(*piece, *target).into());
+                    moves.push(Move::capture_piece(*piece, *target).into());
                 }
                 break;
-            } else {
+            } else if !only_captures {
                 moves.push(Move::move_piece(*piece, Position::new(x, piece.position.y)).into());
             }
         }
@@ -447,10 +471,10 @@ impl Board {
         for x in (0..piece.position.x).rev() {
             if let Some(target) = self.piece_at(&Position::new(x, piece.position.y)) {
                 if target.color != piece.color {
-                    moves.push(Move::take_piece(*piece, *target).into());
+                    moves.push(Move::capture_piece(*piece, *target).into());
                 }
                 break;
-            } else {
+            } else if !only_captures{
                 moves.push(Move::move_piece(*piece, Position::new(x, piece.position.y)).into());
             }
         }
@@ -458,10 +482,10 @@ impl Board {
         for y in piece.position.y+1..=7 {
             if let Some(target) = self.piece_at(&Position::new(piece.position.x, y)) {
                 if target.color != piece.color {
-                    moves.push(Move::take_piece(*piece, *target).into());
+                    moves.push(Move::capture_piece(*piece, *target).into());
                 }
                 break;
-            } else {
+            } else if !only_captures{
                 moves.push(Move::move_piece(*piece, Position::new(piece.position.x, y)).into());
             }
         }
@@ -469,14 +493,61 @@ impl Board {
         for y in (0..piece.position.y).rev() {
             if let Some(target) = self.piece_at(&Position::new(piece.position.x, y)) {
                 if target.color != piece.color {
-                    moves.push(Move::take_piece(*piece, *target).into());
+                    moves.push(Move::capture_piece(*piece, *target).into());
                 }
                 break;
-            } else {
+            } else if !only_captures {
                 moves.push(Move::move_piece(*piece, Position::new(piece.position.x, y)).into());
             }
         }
     }
+
+    pub fn append_bishop_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
+        for n in 1..min(piece.position.x, piece.position.y) {
+            if let Some(target) = self.piece_at(&Position::new(x, piece.position.y)) {
+                if target.color != piece.color {
+                    moves.push(Move::capture_piece(*piece, *target).into());
+                }
+                break;
+            } else if !only_captures {
+                moves.push(Move::move_piece(*piece, Position::new(x, piece.position.y)).into());
+            }
+        }
+
+        for x in (0..piece.position.x).rev() {
+            if let Some(target) = self.piece_at(&Position::new(x, piece.position.y)) {
+                if target.color != piece.color {
+                    moves.push(Move::capture_piece(*piece, *target).into());
+                }
+                break;
+            } else if !only_captures{
+                moves.push(Move::move_piece(*piece, Position::new(x, piece.position.y)).into());
+            }
+        }
+
+        for y in piece.position.y+1..=7 {
+            if let Some(target) = self.piece_at(&Position::new(piece.position.x, y)) {
+                if target.color != piece.color {
+                    moves.push(Move::capture_piece(*piece, *target).into());
+                }
+                break;
+            } else if !only_captures{
+                moves.push(Move::move_piece(*piece, Position::new(piece.position.x, y)).into());
+            }
+        }
+
+        for y in (0..piece.position.y).rev() {
+            if let Some(target) = self.piece_at(&Position::new(piece.position.x, y)) {
+                if target.color != piece.color {
+                    moves.push(Move::capture_piece(*piece, *target).into());
+                }
+                break;
+            } else if !only_captures {
+                moves.push(Move::move_piece(*piece, Position::new(piece.position.x, y)).into());
+            }
+        }
+    }
+
 
     pub fn append_pawn_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
         match piece.color {
@@ -484,7 +555,7 @@ impl Board {
                 if let Some(position) = piece.position.up_left(1) {
                     if let Some(target) = self.piece_at(&position) {
                         if target.color != piece.color {
-                            moves.push(Move::take_piece(
+                            moves.push(Move::capture_piece(
                                 *piece,
                                 *target
                             ).into());
@@ -495,7 +566,7 @@ impl Board {
                 if let Some(position) = piece.position.up_right(1) {
                     if let Some(target) = self.piece_at(&position) {
                         if target.color != piece.color {
-                            moves.push(Move::take_piece(
+                            moves.push(Move::capture_piece(
                                 *piece,
                                 *target
                             ).into());
@@ -506,7 +577,7 @@ impl Board {
                 // promotes
                 if piece.position.y == 6 {
                     if let None = self.piece_at(&piece.position.up(1).unwrap()) {
-                        moves.push(Move::promote_piece(*piece, piece.position.up(1).unwrap(), Type::Rook).into());
+                        moves.push(Move::promote(*piece, piece.position.up(1).unwrap(), Type::Rook).into());
                     }
                 }
 
@@ -538,7 +609,7 @@ impl Board {
                 if let Some(position) = piece.position.down_left(1) {
                     if let Some(target) = self.piece_at(&position) {
                         if target.color != piece.color {
-                            moves.push(Move::take_piece(
+                            moves.push(Move::capture_piece(
                                 *piece,
                                 *target
                             ).into());
@@ -549,7 +620,7 @@ impl Board {
                 if let Some(position) = piece.position.down_right(1) {
                     if let Some(target) = self.piece_at(&position) {
                         if target.color != piece.color {
-                            moves.push(Move::take_piece(
+                            moves.push(Move::capture_piece(
                                 *piece,
                                 *target
                             ).into());
@@ -560,7 +631,7 @@ impl Board {
                 // promotes
                 if piece.position.y == 1 {
                     if let None = self.piece_at(&piece.position.down(1).unwrap()) {
-                        moves.push(Move::promote_piece(*piece, piece.position.down(1).unwrap(), Type::Rook).into());
+                        moves.push(Move::promote(*piece, piece.position.down(1).unwrap(), Type::Rook).into());
                     }
                 }
 
@@ -651,34 +722,34 @@ impl Board {
 
     pub fn make_move(&mut self, m: Move) {
         match m.action {
-            Action::EvaluatePosition => {
+            Action::Evaluation {..} => {
                 unreachable!()
             },
             Action::Move { from, to } => {
                 self.move_piece(from, to);
             }
-            Action::Take { from, to } => {
-                self.remove_piece(to);
-                self.move_piece(from, from.moved(to.position));
+            Action::Capture { piece, target } => {
+                self.remove_piece(target);
+                self.move_piece(piece, piece.moved(target.position));
             }
-            Action::Promote {from, to} => {
-                self.move_piece(from, to);
+            Action::Promote {old_piece, new_piece} => {
+                self.move_piece(old_piece, new_piece);
             }
         }
     }
 
     pub fn unmake_move(&mut self, m: Move) {
         match m.action {
-            Action::EvaluatePosition => unreachable!(),
+            Action::Evaluation {..} => unreachable!(),
             Action::Move { from, to } => {
                 self.move_piece(to, from);
             }
-            Action::Take { from, to } => {
-                self.move_piece(from.moved(to.position), from);
-                self.add_piece(to);
+            Action::Capture { piece, target } => {
+                self.move_piece(piece.moved(target.position), piece);
+                self.add_piece(target);
             }
-            Action::Promote {from, to} => {
-                self.move_piece(to, from);
+            Action::Promote { old_piece, new_piece } => {
+                self.move_piece(new_piece, old_piece);
             }
         }
     }

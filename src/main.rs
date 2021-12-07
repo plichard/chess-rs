@@ -16,8 +16,6 @@ fn main() {
 
     println!("sizeof Move: {}", std::mem::size_of::<board::Move>());
 
-    return;
-
     let mut board = Board::new_classic_game();
 
     let mut rng = rand::thread_rng();
@@ -36,12 +34,12 @@ fn main() {
         // }
         // let m = moves[0];
         let mut root_node : MoveNode = Move::evaluate(0).into();
-        let m = board.search(10, Move::evaluate(-i64::MAX).into(), Move::evaluate(i64::MAX).into(), &mut root_node, false);
+        let m = board.search(6, Move::evaluate(-i32::MAX).into(), Move::evaluate(i32::MAX).into(), &mut root_node, false);
         if !m.is_valid() {
             break;
         }
         // println!("{:?}", root_node);
-        println!("Evaluation ({}): {}", root_node.recursive_children_count(), m.evaluation());
+        println!("Evaluation ({}): {}", root_node.recursive_children_count(), m.value());
         stdin().read_line(&mut buffer);
         board.push_move(m);
     }

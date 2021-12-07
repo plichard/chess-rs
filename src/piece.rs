@@ -9,50 +9,36 @@ pub enum Color {
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Type {
     Pawn,
-    // Bishop,
+    Bishop,
     // Knight,
     Rook,
     // Queen,
     King
 }
 
-#[derive(Debug)]
-pub struct PieceData {
+pub type PieceIndex = u8;
+
+#[derive(Debug, Copy, Clone)]
+pub struct Piece {
     pub t: Type,
     pub position: Position,
-}
-
-#[derive(Debug)]
-pub enum Piece {
-    Unused,
-    Placed(PieceData),
-    Captured(PieceData)
+    pub index: PieceIndex,
+    pub color: Color
 }
 
 impl Piece {
-    fn captured(self) -> Self {
-        let Piece::Placed(data) = self;
-        Piece::Captured(data)
-    }
-
-    fn uncaptured(self) -> Self {
-        let Piece::Captured(data) = self;
-        Piece::Placed(data)
-    }
-}
-
-
-impl PieceData {
-    pub fn character(&self) -> char {
+    pub fn character(&self) -> &str {
         use Color::*;
         use Type::*;
         match (self.color, self.t) {
-            (White, Pawn) => 'P',
-            (Black, Pawn) => 'p',
-            (White, Rook) => 'R',
-            (Black, Rook) => 'r',
-            (White, King) => 'K',
-            (Black, King) => 'k',
+            (White, Pawn) => "P",
+            (Black, Pawn) => "︎p",
+            (White, Rook) => "R",
+            (Black, Rook) => "r",
+            (White, King) => "K",
+            (Black, King) => "k",
+            (White, Bishop) => "B",
+            (Black, Bishop) => "b",
         }
     }
 
@@ -60,10 +46,12 @@ impl PieceData {
         Self {
             t: self.t,
             position,
+            index: self.index,
+            color: self.color
         }
     }
 
-    pub fn base_value(&self) -> i64 {
+    pub fn base_value(&self) -> i32 {
         match self.t {
             Type::Pawn => 1000,
             Type::Rook => 5000,
@@ -71,12 +59,12 @@ impl PieceData {
         }
     }
 
-    pub fn value(&self) -> i64 {
+    pub fn value(&self) -> i32 {
         let pos_value = match self.t {
             Type::Pawn => {
                 let v = match self.color {
-                    Color::White => (10*self.position.y as i64),
-                    Color::Black => 10*(7-self.position.y as i64)
+                    Color::White => (10*self.position.y as i32),
+                    Color::Black => 10*(7-self.position.y as i32)
                 };
                 v
                 //50*v/(1+v)
@@ -100,7 +88,13 @@ impl PieceData {
                 };
                 v
             },
-            Type::King => 0,
+            Type::King => {
+                let v = match self.color {
+                    Color::White => (10*self.position.y as i32),
+                    Color::Black => 10*(7-self.position.y as i32)
+                };
+                v
+            },
         };
 
         self.base_value() + pos_value

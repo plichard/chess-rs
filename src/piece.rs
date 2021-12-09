@@ -32,7 +32,7 @@ impl Piece {
         use Type::*;
         match (self.color, self.t) {
             (White, Pawn) => "P",
-            (Black, Pawn) => "︎p",
+            (Black, Pawn) => "p",
             (White, Rook) => "R",
             (Black, Rook) => "r",
             (White, King) => "K",
@@ -69,24 +69,25 @@ impl Piece {
     pub fn value(&self) -> i32 {
         let pos_value = match self.t {
             Type::Pawn => {
-                let v = match self.color {
-                    Color::White => (10*self.position.y as i32),
-                    Color::Black => 10*(7-self.position.y as i32)
-                };
-                v
+                // let v = match self.color {
+                //     Color::White => (10*self.position.y as i32),
+                //     Color::Black => 10*(7-self.position.y as i32)
+                // };
+                // v
+                0
                 //50*v/(1+v)
             },
             Type::Rook => {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*50) as i32
+                ((dx + dy)*5) as i32
             },
             Type::King => {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*10) as i32
+                ((dx + dy)*1) as i32
             },
             Type::Bishop => {
                 0
@@ -95,13 +96,13 @@ impl Piece {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*50) as i32
+                ((dx + dy)*5) as i32
             },
             Type::Knight => {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*50) as i32
+                ((dx + dy)*5) as i32
             },
         };
 

@@ -2,6 +2,7 @@ use std::iter::zip;
 
 use crate::piece::{Color, Piece, PieceIndex, Type};
 use crate::utils::Position;
+use crate::slotvec::StaticSlotVec;
 use std::cmp::Ordering;
 use termcolor::{ColorChoice, ColorSpec, WriteColor};
 use std::io::Write;
@@ -25,7 +26,7 @@ impl Into<MoveNode> for Move {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MoveNode {
     pub m: Move,
     children: Vec<MoveNode>
@@ -124,6 +125,23 @@ impl Move {
     }
 }
 
+#[derive(Copy, Clone)]
+struct Cell {
+    piece: Option<Piece>,
+    attacking_white_pieces: i8,
+    attacking_black_pieces: i8,
+}
+
+impl Cell {
+    pub fn empty() -> Self {
+        Self {
+            piece: None,
+            attacking_white_pieces: 0,
+            attacking_black_pieces: 0,
+        }
+    }
+}
+
 #[derive(Clone)]
 pub struct Board {
     white_pieces: [Option<Piece>; 16],
@@ -132,7 +150,7 @@ pub struct Board {
     used_white_pieces: usize,
     used_black_pieces: usize,
 
-    cells: [[Option<Piece>; 8]; 8],
+    cells: [[Cell; 8]; 8],
     move_stack: Vec<Move>,
 
     green: ColorSpec,
@@ -153,7 +171,7 @@ impl Board {
         Self {
             white_pieces: [None; 16],
             black_pieces: [None; 16],
-            cells: [[None; 8]; 8],
+            cells: [[Cell::empty(); 8]; 8],
             move_stack: Vec::new(),
             green,
             red,
@@ -167,7 +185,7 @@ impl Board {
 
     pub fn parse_move(&mut self, msg: &String) -> bool {
         let msg = msg.as_bytes();
-        if msg.len() != 6 {
+        if msg.len() < 4 {
             return false;
         }
         let char_to_n = |c: u8| c as i8 - 'a' as i8;
@@ -326,7 +344,7 @@ impl Board {
                 color,
                 index: self.used_white_pieces as u8
             });
-            self.cells[x as usize][y as usize] = self.white_pieces[self.used_white_pieces];
+            self.cells[x as usize][y as usize].piece = self.white_pieces[self.used_white_pieces];
             self.used_white_pieces += 1;
         }
         else {
@@ -336,7 +354,7 @@ impl Board {
                 color,
                 index: self.used_black_pieces as u8
             });
-            self.cells[x as usize][y as usize] = self.black_pieces[self.used_black_pieces];
+            self.cells[x as usize][y as usize].piece = self.black_pieces[self.used_black_pieces];
             self.used_black_pieces += 1;
         }
     }
@@ -357,12 +375,12 @@ impl Board {
         //     return Move::evaluate(self.evaluate_position());
         // }
 
-        if only_captures && depth < -20 {
+        if only_captures && depth < -10 {
             // return Move{ score: 0, action: Action::Evaluation {score: self.evaluate_position()}};
             return Move::evaluate(self.evaluate_position());
         }
 
-        let mut moves = self.collect_all_moves(self.current_color(), only_captures);
+        let mut moves = self.collect_all_moves(self.current_color(), only_captures, false);
         if moves.is_empty() {
             return Move::evaluate(self.evaluate_position());
         }
@@ -376,7 +394,7 @@ impl Board {
             &mut parent.children
         };
 
-        for m in &mut parent.children {
+        for m in moves {
             self.push_move(m.m);
             let test_move = -self.search(depth - 1, -beta, -alpha, m, only_captures);
             // println!("test move: {}", test_move.evaluation);
@@ -413,7 +431,7 @@ impl Board {
     }
 
     pub fn piece_at(&self, position: &Position) -> &Option<Piece> {
-        &self.cells[position.x as usize][position.y as usize]
+        &self.cells[position.x as usize][position.y as usize].piece
     }
 
     pub fn evaluate_position(&self) -> i32 {
@@ -448,13 +466,13 @@ impl Board {
     // 4 bits per cell, 64*4 = 256 bits total per board position
     pub fn position_hash(&self) -> (u64, u64, u64, u64) {
 
-        let hash = |rows: &[[Option<Piece>; 8]]| {
+        let hash = |rows: &[[Cell; 8]]| {
             let mut value : u64 = 0;
             for row in rows {
                 for cell in row {
                     value <<= 4;
                     value *= 2 << 4;
-                    if let Some(piece) = &cell {
+                    if let Some(piece) = &cell.piece {
                         value += if piece.color == Color::White {1} else {0};
                         value += piece.t as u64;
                     }
@@ -471,7 +489,44 @@ impl Board {
         (v1,v2,v3,v4)
     }
 
-    pub fn collect_all_moves(&self, color: Color, only_captures: bool) -> Vec<MoveNode> {
+    pub fn compute_attacked_cells(&mut self) {
+        for y in 0..8 {
+            for x in 0..8 {
+                self.cell_mut_at(Position::new(x,y)).attacking_white_pieces = 0;
+                self.cell_mut_at(Position::new(x,y)).attacking_black_pieces = 0;
+            }
+        }
+
+        let white_moves = self.collect_all_moves(Color::White, false, true);
+        for m in &white_moves {
+            match &m.m.action {
+                Action::Evaluation { .. } => {}
+                Action::Move { to, .. } => {
+                    self.cell_mut_at(to.position).attacking_white_pieces += 1;
+                }
+                Action::Capture { piece, target } => {
+                    self.cell_mut_at(target.position).attacking_white_pieces += 1;
+                }
+                Action::Promote { .. } => {}
+            }
+        }
+
+        let black_moves = self.collect_all_moves(Color::Black, false, true);
+        for m in &black_moves {
+            match &m.m.action {
+                Action::Evaluation { .. } => {}
+                Action::Move { to, .. } => {
+                    self.cell_mut_at(to.position).attacking_black_pieces += 1;
+                }
+                Action::Capture { piece, target } => {
+                    self.cell_mut_at(target.position).attacking_black_pieces += 1;
+                }
+                Action::Promote { .. } => {}
+            }
+        }
+    }
+
+    pub fn collect_all_moves(&self, color: Color, only_captures: bool, include_control: bool) -> Vec<MoveNode> {
         let mut moves = Vec::new();
         let pieces = match color {
             Color::White => &self.white_pieces[0..self.used_white_pieces],
@@ -480,16 +535,16 @@ impl Board {
 
         for piece in pieces {
             if let Some(piece) = piece {
-                self.append_piece_moves(&piece, &mut moves, only_captures);
+                self.append_piece_moves(&piece, &mut moves, only_captures, include_control);
             }
         }
 
         moves
     }
 
-    pub fn append_piece_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
+    pub fn append_piece_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool, include_control: bool) {
         match piece.t {
-            Type::Pawn => self.append_pawn_moves(&piece, moves, only_captures),
+            Type::Pawn => self.append_pawn_moves(&piece, moves, only_captures, include_control),
             Type::Rook => self.append_rook_moves(&piece, moves, only_captures),
             Type::Bishop => self.append_bishop_moves(&piece, moves, only_captures),
             Type::King => self.append_king_moves(&piece, moves, only_captures),
@@ -616,7 +671,7 @@ impl Board {
 
     pub fn append_bishop_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
         // up - right
-        for n in 1..i8::min(7 - piece.position.x, 7 - piece.position.y) {
+        for n in 1..=i8::min(7 - piece.position.x, 7 - piece.position.y) {
             let x = piece.position.x + n;
             let y = piece.position.y + n;
             if let Some(target) = self.piece_at(&Position::new(x, y)) {
@@ -630,7 +685,7 @@ impl Board {
         }
 
         // up - left
-        for n in 1..i8::min(piece.position.x, 7 - piece.position.y) {
+        for n in 1..=i8::min(piece.position.x, 7 - piece.position.y) {
             let x = piece.position.x - n;
             let y = piece.position.y + n;
             if let Some(target) = self.piece_at(&Position::new(x, y)) {
@@ -644,7 +699,7 @@ impl Board {
         }
 
         // down - left
-        for n in 1..i8::min(piece.position.x, piece.position.y) {
+        for n in 1..=i8::min(piece.position.x, piece.position.y) {
             let x = piece.position.x - n;
             let y = piece.position.y - n;
             if let Some(target) = self.piece_at(&Position::new(x, y)) {
@@ -658,7 +713,7 @@ impl Board {
         }
 
         // down - right
-        for n in 1..i8::min(7 - piece.position.x, piece.position.y) {
+        for n in 1..=i8::min(7 - piece.position.x, piece.position.y) {
             let x = piece.position.x + n;
             let y = piece.position.y - n;
             if let Some(target) = self.piece_at(&Position::new(x, y)) {
@@ -673,7 +728,7 @@ impl Board {
     }
 
 
-    pub fn append_pawn_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
+    pub fn append_pawn_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool, include_control: bool) {
         match piece.color {
             Color::White => {
                 if let Some(position) = piece.position.up_left(1) {
@@ -684,6 +739,8 @@ impl Board {
                                 *target
                             ).into());
                         }
+                    } else if include_control {
+                        moves.push(Move::move_piece(*piece, position).into());
                     }
                 }
 
@@ -695,6 +752,8 @@ impl Board {
                                 *target
                             ).into());
                         }
+                    } else if include_control {
+                        moves.push(Move::move_piece(*piece, position).into());
                     }
                 }
 
@@ -705,7 +764,7 @@ impl Board {
                     }
                 }
 
-                if !only_captures {
+                if !only_captures && !include_control {
                     if let Some(position) = piece.position.up(1) {
                         if let None = self.piece_at(&position) {
                             moves.push(Move::move_piece(
@@ -738,6 +797,8 @@ impl Board {
                                 *target
                             ).into());
                         }
+                    } else if include_control {
+                        moves.push(Move::move_piece(*piece, position).into());
                     }
                 }
 
@@ -749,6 +810,8 @@ impl Board {
                                 *target
                             ).into());
                         }
+                    } else if include_control {
+                        moves.push(Move::move_piece(*piece, position).into());
                     }
                 }
 
@@ -759,7 +822,7 @@ impl Board {
                     }
                 }
 
-                if !only_captures {
+                if !only_captures && !include_control {
                     if let Some(position) = piece.position.down(1) {
                         if let None = self.piece_at(&position) {
                             moves.push(Move::move_piece(
@@ -795,16 +858,72 @@ impl Board {
         });
     }
 
-    pub fn cell_at(&mut self, position: Position) -> &mut Option<Piece> {
+    pub fn cell_mut_at(&mut self, position: Position) -> &mut Cell {
         &mut self.cells[position.x as usize][position.y as usize]
+    }
+
+    pub fn cell_at(&self, position: Position) -> &Cell {
+        &self.cells[position.x as usize][position.y as usize]
+    }
+
+    fn remove_piece_attack(&mut self, piece: &Piece) {
+        let mut moves = Vec::with_capacity(21);
+        self.append_piece_moves(piece, &mut moves, false, true);
+
+        if piece.color == Color::White {
+            for m in &moves {
+                match &m.m.action {
+                    Action::Evaluation { .. } => {}
+                    Action::Move {  to, .. } => self.cell_mut_at(to.position).attacking_white_pieces -= 1,
+                    Action::Capture { piece, target } => self.cell_mut_at(target.position).attacking_white_pieces -= 1,
+                    Action::Promote { .. } => {}
+                }
+            }
+        }
+        else {
+            for m in &moves {
+                match &m.m.action {
+                    Action::Evaluation { .. } => {}
+                    Action::Move {  to, .. } => self.cell_mut_at(to.position).attacking_black_pieces -= 1,
+                    Action::Capture { piece, target } => self.cell_mut_at(target.position).attacking_black_pieces -= 1,
+                    Action::Promote { .. } => {}
+                }
+            }
+        }
+    }
+
+    fn add_piece_attack(&mut self, piece: &Piece) {
+        let mut moves = Vec::with_capacity(21);
+        self.append_piece_moves(piece, &mut moves, false, true);
+
+        if piece.color == Color::White {
+            for m in &moves {
+                match &m.m.action {
+                    Action::Evaluation { .. } => {}
+                    Action::Move {  to, .. } => self.cell_mut_at(to.position).attacking_white_pieces += 1,
+                    Action::Capture { piece, target } => self.cell_mut_at(target.position).attacking_white_pieces += 1,
+                    Action::Promote { .. } => {}
+                }
+            }
+        }
+        else {
+            for m in &moves {
+                match &m.m.action {
+                    Action::Evaluation { .. } => {}
+                    Action::Move {  to, .. } => self.cell_mut_at(to.position).attacking_black_pieces += 1,
+                    Action::Capture { piece, target } => self.cell_mut_at(target.position).attacking_black_pieces += 1,
+                    Action::Promote { .. } => {}
+                }
+            }
+        }
     }
 
     pub fn move_piece(&mut self, from: Piece, to: Piece) {
 
-        assert!(self.cell_at(to.position).is_none());
+        assert!(self.cell_at(to.position).piece.is_none());
 
-        *self.cell_at(to.position) = Some(to);
-        *self.cell_at(from.position) = None;
+        self.cell_mut_at(to.position).piece = Some(to);
+        self.cell_mut_at(from.position).piece = None;
 
         debug_assert_eq!(from.index, to.index);
 
@@ -818,8 +937,8 @@ impl Board {
         }
     }
 
-    pub fn remove_piece(&mut self, piece: Piece) {
-        *self.cell_at(piece.position) = None;
+    fn remove_piece(&mut self, piece: Piece) {
+        self.cell_mut_at(piece.position).piece = None;
         match piece.color {
             Color::White => {
                 self.white_pieces[piece.index as usize] = None;
@@ -832,8 +951,8 @@ impl Board {
         }
     }
 
-    pub fn add_piece(&mut self, piece: Piece) {
-        *self.cell_at(piece.position) = Some(piece);
+    fn add_piece(&mut self, piece: Piece) {
+        self.cell_mut_at(piece.position).piece = Some(piece);
         match piece.color {
             Color::White => {
                 self.white_pieces[piece.index as usize] = Some(piece);
@@ -852,14 +971,21 @@ impl Board {
                 unreachable!()
             },
             Action::Move { from, to } => {
+                // self.remove_piece_attack(&from);
                 self.move_piece(from, to);
+                // self.add_piece_attack(&to);
             }
             Action::Capture { piece, target } => {
+                // self.remove_piece_attack(&target);
+                // self.remove_piece_attack(&piece);
                 self.remove_piece(target);
                 self.move_piece(piece, piece.moved(target.position));
+                // self.add_piece_attack(&piece.moved(target.position));
             }
             Action::Promote {old_piece, new_piece} => {
+                // self.remove_piece_attack(&old_piece);
                 self.move_piece(old_piece, new_piece);
+                // self.add_piece_attack(&new_piece);
             }
         }
     }
@@ -868,14 +994,21 @@ impl Board {
         match m.action {
             Action::Evaluation {..} => unreachable!(),
             Action::Move { from, to } => {
+                // self.remove_piece_attack(&to);
                 self.move_piece(to, from);
+                // self.add_piece_attack(&from);
             }
             Action::Capture { piece, target } => {
+                // self.remove_piece_attack(&piece.moved(target.position));
                 self.move_piece(piece.moved(target.position), piece);
                 self.add_piece(target);
+                // self.add_piece_attack(&target);
+                // self.add_piece_attack(&piece);
             }
             Action::Promote { old_piece, new_piece } => {
+                // self.remove_piece_attack(&new_piece);
                 self.move_piece(new_piece, old_piece);
+                // self.add_piece_attack(&old_piece);
             }
         }
     }
@@ -888,6 +1021,15 @@ impl Board {
     pub fn pop_move(&mut self) {
         let m = self.move_stack.pop().unwrap();
         self.unmake_move(m);
+    }
+
+    pub fn print_attacked_cells(&self) {
+        for y in 0..8 {
+            for x in 0..8 {
+                print!("{},{}|", self.cell_at(Position::new(x, 7 - y)).attacking_white_pieces, self.cell_at(Position::new(x, 7 - y)).attacking_black_pieces);
+            }
+            println!();
+        }
     }
 
     pub fn print(&self) {

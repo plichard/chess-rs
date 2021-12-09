@@ -1,3 +1,5 @@
+use std::iter::zip;
+
 use crate::piece::{Color, Piece, PieceIndex, Type};
 use crate::utils::Position;
 use std::cmp::Ordering;
@@ -163,6 +165,65 @@ impl Board {
         }
     }
 
+    pub fn parse_move(&mut self, msg: &String) -> bool {
+        let msg = msg.as_bytes();
+        if msg.len() != 6 {
+            return false;
+        }
+        let char_to_n = |c: u8| c as i8 - 'a' as i8;
+        let digit_to_n = |c: u8| c as i8 - '1' as i8;
+        let x1 = char_to_n(msg[0]);
+        let y1 = digit_to_n(msg[1]);
+        let x2 = char_to_n(msg[2]);
+        let y2 = digit_to_n(msg[3]);
+
+        if x1 < 0 || x1 > 7 {
+            return false;
+        }
+
+        if y1 < 0 || y1 > 7 {
+            return false;
+        }
+
+        if x2 < 0 || x2 > 7 {
+            return false;
+        }
+
+        if y2 < 0 || y2 > 7 {
+            return false;
+        }
+
+        let p1 = Position::new(x1, y1);
+        let p2 = Position::new(x2, y2);
+
+        if let Some(piece) = self.piece_at(&p1) {
+            if piece.color == self.current_color() {
+                
+            } else {
+                println!("This is not your piece");
+            }
+        } else {
+            println!("There is no piece there");
+            return false
+        }
+
+        let piece = self.piece_at(&p1).unwrap();
+
+        if let Some(target) = self.piece_at(&p2) {
+            if target.color != self.current_color() {
+                self.push_move(Move::capture_piece(piece, *target));
+            } else {
+                println!("Cannot capture your own piece");
+                return false;
+            }
+        } else {
+            self.push_move(Move::move_piece(piece, p2));
+        }
+
+
+        true
+    }
+
     pub fn new_promote_game() -> Self {
         let mut game = Board::new_empty_game();
 
@@ -192,6 +253,12 @@ impl Board {
 
         game.add_new_piece(Color::Black, Type::Bishop, 2, 7);
         game.add_new_piece(Color::Black, Type::Bishop, 5, 7);
+
+        game.add_new_piece(Color::White, Type::Knight, 1, 0);
+        game.add_new_piece(Color::White, Type::Knight, 6, 0);
+
+        game.add_new_piece(Color::Black, Type::Knight, 1, 7);
+        game.add_new_piece(Color::Black, Type::Knight, 6, 7);
 
         game
     }
@@ -301,7 +368,13 @@ impl Board {
         }
 
         self.sort_moves(&mut moves);
-        parent.children = moves;
+
+        let moves = if only_captures {
+            &mut moves
+        } else {
+            parent.children = moves;
+            &mut parent.children
+        };
 
         for m in &mut parent.children {
             self.push_move(m.m);
@@ -423,6 +496,31 @@ impl Board {
             Type::Queen => {
                 self.append_rook_moves(&piece, moves, only_captures);
                 self.append_bishop_moves(&piece, moves, only_captures);
+            },
+            Type::Knight => self.append_knight_moves(&piece, moves, only_captures)
+        }
+    }
+
+    pub fn append_knight_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
+        let dx = [1, -1, -2, -2, -1, 1, 2, 2];
+        let dy = [2, 2, 1, -1, -2, -2, -1, 1];
+
+        for (dx, dy) in zip(dx, dy) {
+            let x = piece.position.x + dx;
+            let y = piece.position.y + dy;
+
+            if x < 0 || x > 7 || y < 0 || y > 7 {
+                continue;
+            }
+
+            let position = Position::new(x, y);
+
+            if let Some(target) = self.piece_at(&position) {
+                if target.color != piece.color {
+                    moves.push(Move::capture_piece(*piece, *target).into());
+                }
+            }  else if !only_captures {
+                moves.push(Move::move_piece(*piece, position).into());
             }
         }
     }
@@ -703,10 +801,12 @@ impl Board {
 
     pub fn move_piece(&mut self, from: Piece, to: Piece) {
 
+        assert!(self.cell_at(to.position).is_none());
+
         *self.cell_at(to.position) = Some(to);
         *self.cell_at(from.position) = None;
 
-        assert_eq!(from.index, to.index);
+        debug_assert_eq!(from.index, to.index);
 
         match from.color {
             Color::White => {
@@ -792,9 +892,10 @@ impl Board {
 
     pub fn print(&self) {
         let mut stdout = termcolor::StandardStream::stdout(ColorChoice::Always);
-        let print_line = |out: &mut termcolor::StandardStream| writeln!(out, "{}+", "+---".repeat(8));
+        let print_line = |out: &mut termcolor::StandardStream| writeln!(out, "  {}+", "+---".repeat(8));
         print_line(&mut stdout);
         for y in 0..8 {
+            write!(&mut stdout, "{} ", 8 - y);
             for x in 0..8 {
                 if let Some(piece) = self.piece_at(&Position::new(x, 7 - y)) {
                     stdout.reset();
@@ -814,6 +915,7 @@ impl Board {
             println!("|");
             print_line(&mut stdout);
         }
+        println!("    a   b   c   d   e   f   g   h");
         println!("position: {}", self.evaluate_position());
     }
 

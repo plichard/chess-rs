@@ -10,7 +10,7 @@ pub enum Color {
 pub enum Type {
     Pawn,
     Bishop,
-    // Knight,
+    Knight,
     Rook,
     Queen,
     King
@@ -41,6 +41,8 @@ impl Piece {
             (Black, Bishop) => "b",
             (White, Queen) => "Q",
             (Black, Queen) => "q",
+            (White, Knight) => "N",
+            (Black, Knight) => "n"
         }
     }
 
@@ -57,9 +59,10 @@ impl Piece {
         match self.t {
             Type::Pawn => 1000,
             Type::Bishop => 3000,
+            Type::Knight => 3000,
             Type::Rook => 5000,
             Type::Queen => 9000,
-            Type::King => 100000,
+            Type::King => 10000000,
         }
     }
 
@@ -74,35 +77,32 @@ impl Piece {
                 //50*v/(1+v)
             },
             Type::Rook => {
-                let v = match self.color {
-                    Color::White => {
-                        if self.position.y == 6 {
-                            100
-                        } else {
-                            0
-                        }
-                    },
-                    Color::Black => {
-                        if self.position.y == 1 {
-                            100
-                        } else {
-                            0
-                        }
-                    }
-                };
-                v
+                // priority in the center
+                let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
+                let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
+                ((dx + dy)*50) as i32
             },
             Type::King => {
-                let v = match self.color {
-                    Color::White => (10*self.position.y as i32),
-                    Color::Black => 10*(7-self.position.y as i32)
-                };
-                v
+                // priority in the center
+                let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
+                let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
+                ((dx + dy)*10) as i32
             },
             Type::Bishop => {
                 0
             },
-            Type::Queen => 0,
+            Type::Queen => {
+                // priority in the center
+                let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
+                let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
+                ((dx + dy)*50) as i32
+            },
+            Type::Knight => {
+                // priority in the center
+                let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
+                let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
+                ((dx + dy)*50) as i32
+            },
         };
 
         self.base_value() + pos_value

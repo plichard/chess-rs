@@ -3,7 +3,7 @@ use crate::utils::*;
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Color {
     White,
-    Black
+    Black,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -13,7 +13,7 @@ pub enum Type {
     Knight,
     Rook,
     Queen,
-    King
+    King,
 }
 
 pub type PieceIndex = u8;
@@ -23,7 +23,7 @@ pub struct Piece {
     pub t: Type,
     pub position: Position,
     pub index: PieceIndex,
-    pub color: Color
+    pub color: Color,
 }
 
 impl Piece {
@@ -42,7 +42,7 @@ impl Piece {
             (White, Queen) => "Q",
             (Black, Queen) => "q",
             (White, Knight) => "N",
-            (Black, Knight) => "n"
+            (Black, Knight) => "n",
         }
     }
 
@@ -51,7 +51,7 @@ impl Piece {
             t: self.t,
             position,
             index: self.index,
-            color: self.color
+            color: self.color,
         }
     }
 
@@ -62,7 +62,7 @@ impl Piece {
             Type::Knight => 3000,
             Type::Rook => 5000,
             Type::Queen => 9000,
-            Type::King => 10000000,
+            Type::King => 1000000,
         }
     }
 
@@ -76,36 +76,34 @@ impl Piece {
                 // v
                 0
                 //50*v/(1+v)
-            },
+            }
             Type::Rook => {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*5) as i32
-            },
+                ((dx + dy) * 5) as i32
+            }
             Type::King => {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*1) as i32
-            },
-            Type::Bishop => {
-                0
-            },
+                ((dx + dy) * 1) as i32
+            }
+            Type::Bishop => 0,
             Type::Queen => {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*5) as i32
-            },
+                ((dx + dy) * 5) as i32
+            }
             Type::Knight => {
                 // priority in the center
                 let dx = i8::min(self.position.x, 7 - self.position.x) as i32;
                 let dy = i8::min(self.position.y, 7 - self.position.y) as i32;
-                ((dx + dy)*5) as i32
-            },
+                ((dx + dy) * 5) as i32
+            }
         };
 
-        self.base_value() + pos_value
+        self.base_value() /* + pos_value */
     }
 }

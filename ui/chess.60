@@ -1,0 +1,74 @@
+struct CellData := {
+    id: int
+}
+
+Piece := Rectangle {
+    
+}
+
+Square := Rectangle {
+    property <bool> white;
+    property <bool> selected;
+    callback clicked;
+    property <int> cx;
+    property <int> cy;
+    property <int> piece_id;
+
+    width: 128px;
+    height: 128px;
+
+    
+    Image {
+        source: white ? @image-url("icons/light.png") : @image-url("icons/dark.png");
+        width: root.width;
+        height: root.height;
+    }
+
+    Rectangle { 
+        background: #00ff0040;
+        visible: selected;
+    }
+
+    Image {
+        width: root.width;
+        height: root.height;
+        states [
+            wpawn when selected: {
+            }
+        ]
+    }
+
+
+    TouchArea {
+        clicked => { 
+            root.selected = !root.selected;
+            root.clicked();
+        }
+    }
+}
+
+MainWindow := Window {
+    width: 8*128px;
+    height: 8*128px;
+
+    title: "Chess";
+
+    callback clicked;
+    property <bool> first;
+
+    property <[CellData]> cells: [];
+    for cell[i] in cells : Square {
+        cx: mod(i, 8);
+        cy: 7 - floor(i / 8);
+        x: cx * 128px;
+        y: cy * 128px;
+        white: mod(cx + cy, 2) == 0;
+        clicked => { 
+            root.clicked(); 
+            if (root.first)  {
+
+            }
+        }
+    }
+}
+

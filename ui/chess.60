@@ -1,10 +1,8 @@
+import { Button } from "sixtyfps_widgets.60";
+
 struct CellData := {
     selected: bool,
     img: image,
-}
-
-Piece := Rectangle {
-    
 }
 
 Square := Rectangle {
@@ -47,26 +45,47 @@ Square := Rectangle {
 }
 
 MainWindow := Window {
-    width: 8*128px;
-    height: 8*128px;
+    // width: 8*128px;
+    // height: 8*128px;
 
     title: "Chess";
 
     // index, x, y
-    callback clicked(int, int, int);
+    callback clicked(int, int);
+    callback reset_game;
+    callback compute_move;
 
     property <[CellData]> cells: [];
-    for cell[i] in cells : Square {
-        cx: mod(i, 8);
-        cy: floor(i / 8);
-        x: cx * 128px;
-        y: cy * 128px;
-        white: mod(cx + cy, 2) == 0;
-        selected: cell.selected;
-        img_src: cell.img;
 
-        clicked => { 
-            root.clicked(i, cx, 7 - cy);
+    VerticalLayout {
+        Rectangle {
+            for cell[i] in cells : Square {
+                cx: mod(i, 8);
+                cy: 7-floor(i / 8);
+                x: cx * 128px;
+                y: cy * 128px;
+                white: mod(cx + cy, 2) == 0;
+                selected: cell.selected;
+                img_src: cell.img;
+
+                clicked => {
+                    root.clicked(cx, 7-cy);
+                }
+            }
+            height: 8*128px;
+            width: 8*128px;
+        }
+        HorizontalLayout {
+            Button {
+                text: "Reset Game";
+                height: 64px;
+                clicked => {root.reset_game();}
+            }
+            Button {
+                text: "Compute";
+                height: 64px;
+                clicked => {root.compute_move();}
+            }
         }
     }
 }

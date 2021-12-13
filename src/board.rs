@@ -188,18 +188,7 @@ impl Board {
         }
     }
 
-    pub fn parse_move(&mut self, msg: &String) -> bool {
-        let msg = msg.as_bytes();
-        if msg.len() < 4 {
-            return false;
-        }
-        let char_to_n = |c: u8| c as i8 - 'a' as i8;
-        let digit_to_n = |c: u8| c as i8 - '1' as i8;
-        let x1 = char_to_n(msg[0]);
-        let y1 = digit_to_n(msg[1]);
-        let x2 = char_to_n(msg[2]);
-        let y2 = digit_to_n(msg[3]);
-
+    pub fn execute_move_from_position(&mut self, x1: i8, y1: i8, x2: i8, y2: i8) -> bool {
         if x1 < 0 || x1 > 7 {
             return false;
         }
@@ -245,6 +234,21 @@ impl Board {
         true
     }
 
+    pub fn parse_move(&mut self, msg: &String) -> bool {
+        let msg = msg.as_bytes();
+        if msg.len() < 4 {
+            return false;
+        }
+        let char_to_n = |c: u8| c as i8 - 'a' as i8;
+        let digit_to_n = |c: u8| c as i8 - '1' as i8;
+        let x1 = char_to_n(msg[0]);
+        let y1 = digit_to_n(msg[1]);
+        let x2 = char_to_n(msg[2]);
+        let y2 = digit_to_n(msg[3]);
+
+        self.execute_move_from_position(x1, y1, x2, y2)
+    }
+
     pub fn new_promote_game() -> Self {
         let mut game = Board::new_empty_game();
 
@@ -275,8 +279,8 @@ impl Board {
         game.add_new_piece(Color::Black, Type::Bishop, 2, 7);
         game.add_new_piece(Color::Black, Type::Bishop, 5, 7);
 
-        game.add_new_piece(Color::White, Type::Knight, 1, 0);
-        game.add_new_piece(Color::White, Type::Knight, 6, 0);
+        // game.add_new_piece(Color::White, Type::Knight, 1, 0);
+        // game.add_new_piece(Color::White, Type::Knight, 6, 0);
 
         game.add_new_piece(Color::Black, Type::Knight, 1, 7);
         game.add_new_piece(Color::Black, Type::Knight, 6, 7);
@@ -441,7 +445,7 @@ impl Board {
     }
 
     pub fn evaluate_position(&mut self) -> i32 {
-        self.compute_attacked_cells();
+        // self.compute_attacked_cells();
         let mut black_value = {
             let mut sum: i32 = 0;
             for piece in self.black_pieces {
@@ -463,14 +467,14 @@ impl Board {
         // let black_value = if black_value != 0 {black_value} else {-100000};
         // let white_value = if white_value != 0 {white_value} else {-100000};
 
-        let mut white_activity = 0;
-        let mut black_activity = 0;
-        for y in 0..8 {
-            for x in 0..8 {
-                white_activity += self.cell_at(Position::new(x, y)).attacking_white_pieces as i32;
-                black_activity += self.cell_at(Position::new(x, y)).attacking_black_pieces as i32;
-            }
-        }
+        // let mut white_activity = 0;
+        // let mut black_activity = 0;
+        // for y in 0..8 {
+        //     for x in 0..8 {
+        //         white_activity += self.cell_at(Position::new(x, y)).attacking_white_pieces as i32;
+        //         black_activity += self.cell_at(Position::new(x, y)).attacking_black_pieces as i32;
+        //     }
+        // }
 
         // white_value += white_activity;
         // black_value += black_activity;

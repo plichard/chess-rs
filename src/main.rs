@@ -14,6 +14,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::cell::{Cell, RefCell};
 use sixtyfps::Model;
+use crate::utils::Position;
 
 mod board;
 mod piece;
@@ -25,7 +26,7 @@ sixtyfps::include_modules!();
 
 struct ChessWrapper {
     p1: Cell<Option<(i32, i32)>>,
-    p2: Cell<Option<(i32, i32)>>,
+    // p2: Cell<Option<(i32, i32)>>,
 
     images: std::collections::HashMap<(Color, Type), sixtyfps::Image>,
     model: std::rc::Rc<sixtyfps::VecModel<CellData>>,
@@ -83,36 +84,64 @@ impl ChessWrapper {
 
         Self {
             p1: Cell::new(None),
-            p2: Cell::new(None),
 
             board: RefCell::new(Board::new_classic_game()),
             model: cells_model,
             images
         }
     }
-    fn on_click(&self, win: &MainWindow, index: usize, x: i32, y: i32) {
-        match (self.p1.get(), self.p2.get()) {
-            (None, None) => {
+    fn on_click(&self, win: &MainWindow, x: i32, y: i32) {
+        println!("Clicked {} {}", x, y);
+        match self.p1.get() {
+            None => {
                 println!("Selected first");
                 self.p1.set(Some((x, y)));
-                self.set_selection(win, index, true);
+                self.set_selection(win, x, y, true);
             }
-            (Some(p1), None) => {
+            Some(p1) => {
                 println!("Selected second");
-                self.p2.set(Some((x, y)));
-                self.set_selection(win, index, true);
-            }
-            (Some(p1), Some(p2)) => {
-                println!("Already selected all");
-                self.clear_selection(win);
+                self.set_selection(win, x, y, true);
+                let (x1, y1) = self.p1.get().unwrap();
+                {
+                    let mut board = self.board.borrow_mut();
+                    board.execute_move_from_position(x1 as i8, y1 as i8, x as i8, y as i8);
+                }
+                self.update(win);
                 self.p1.set(None);
-                self.p2.set(None);
-            },
-            (_, _) => {}
+                // let weak = win.as_weak();
+                // sixtyfps::Timer::single_shot(std::time::Duration::from_secs(1), move || {
+                //     if let Some(win) = weak.upgrade() {
+                //         ChessWrapper::clear_selection(&win);
+                //     }
+                // });
+            }
         }
     }
 
-    fn clear_selection(&self, win: &MainWindow) {
+    fn compute_move(&self, win: &MainWindow) {
+        {
+            let mut board = self.board.borrow_mut();
+            let mut root_node: MoveNode = Move::evaluate(0).into();
+            let m = board.search(
+                5,
+                Move::evaluate(-i32::MAX).into(),
+                Move::evaluate(i32::MAX).into(),
+                &mut root_node,
+                false,
+            );
+
+            // println!("{:?}", root_node);
+            println!(
+                "Evaluation ({}): {}",
+                root_node.recursive_children_count(),
+                m.value()
+            );
+            board.push_move(m);
+        }
+        self.update(win);
+    }
+
+    fn clear_selection(win: &MainWindow) {
         let model = win.get_cells();
         for i in 0..model.row_count() {
             let mut data = model.row_data(i);
@@ -121,15 +150,51 @@ impl ChessWrapper {
         }
     }
 
-    fn set_selection(&self, win: &MainWindow, index: usize, value: bool) {
+    fn set_selection(&self, win: &MainWindow, x: i32, y: i32, value: bool) {
         let model = win.get_cells();
+        let index = (y*8 + x) as usize;
         let mut data = model.row_data(index);
         data.selected = value;
         model.set_row_data(index, data);
     }
 
-    fn set_piece(&self, win: &MainWindow, x: i32, y: i32, t: Type) {
+    fn set_piece(&self, win: &MainWindow, x: i32, y: i32, t: Type, color: Color) {
+        let model = win.get_cells();
+        let index = (y*8 + x) as usize;
+        let mut data = model.row_data(index);
+        data.img = self.images.get(&(color, t)).unwrap().clone();
+        model.set_row_data(index, data);
+    }
 
+    fn set_empty(&self, win: &MainWindow, x: i32, y: i32) {
+        let model = win.get_cells();
+        let index = (y*8 + x) as usize;
+        let mut data = model.row_data(index);
+        data.img = Default::default();
+        model.set_row_data(index, data);
+    }
+
+    fn update(&self, win: &MainWindow) {
+        ChessWrapper::clear_selection(win);
+
+        let mut board = self.board.borrow_mut();
+
+        for y in 0..8 {
+            for x in 0..8 {
+                if let Some(piece) = board.piece_at(&Position::new(x, y)) {
+                    self.set_piece(win, x as i32, y as i32, piece.t, piece.color);
+                } else {
+                    self.set_empty(win, x as i32, y as i32);
+                }
+            }
+        }
+    }
+
+    fn reset_game(&self, win: &MainWindow) {
+        println!("Reset game");
+        ChessWrapper::clear_selection(win);
+        *self.board.borrow_mut() = Board::new_classic_game();
+        self.update(win);
     }
 }
 
@@ -139,18 +204,22 @@ fn test_sixty() {
 
 
 
-    let main_weak = main_window.as_weak();
+    let weak1 = main_window.as_weak();
+    let weak2 = main_window.as_weak();
+    let weak3 = main_window.as_weak();
 
     // let test = std::rc::Rc::new(ChessWrapper::new());
     //
     // let test_copy = test.clone();
 
-    let test_copy = ChessWrapper::new(&main_window);
+    let game = std::rc::Rc::new(ChessWrapper::new(&main_window));
+    let copy1 = game.clone();
+    let copy2 = game.clone();
+    let copy3 = game.clone();
 
-    main_window.on_clicked(move |id, x, y| {
-        let id = id as usize;
-        if let Some(win) = main_weak.upgrade() {
-            test_copy.on_click(&win, id, x, y);
+    main_window.on_clicked(move |x, y| {
+        if let Some(win) = weak1.upgrade() {
+            copy1.on_click(&win, x, y);
             // let cells = win.get_cells();
             // cells.row_data(4);
             // let mut c = cells.row_data(id);
@@ -162,6 +231,18 @@ fn test_sixty() {
 
             //  [id as usize].img = w_queen.clone();
             // cells[id as usize].img = w_queen.clone();
+        }
+    });
+
+    main_window.on_reset_game(move || {
+        if let Some(win) = weak2.upgrade() {
+            copy2.reset_game(&win);
+        }
+    });
+
+    main_window.on_compute_move(move || {
+        if let Some(win) = weak3.upgrade() {
+            copy3.compute_move(&win);
         }
     });
 

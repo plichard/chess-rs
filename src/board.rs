@@ -282,8 +282,8 @@ impl Board {
         // game.add_new_piece(Color::White, Type::Knight, 1, 0);
         // game.add_new_piece(Color::White, Type::Knight, 6, 0);
 
-        game.add_new_piece(Color::Black, Type::Knight, 1, 7);
-        game.add_new_piece(Color::Black, Type::Knight, 6, 7);
+        // game.add_new_piece(Color::Black, Type::Knight, 1, 7);
+        // game.add_new_piece(Color::Black, Type::Knight, 6, 7);
 
         game
     }

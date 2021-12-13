@@ -104,6 +104,6 @@ impl Piece {
             }
         };
 
-        self.base_value() /* + pos_value */
+        self.base_value()  + pos_value
     }
 }

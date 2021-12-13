@@ -1,5 +1,6 @@
 struct CellData := {
-    id: int
+    selected: bool,
+    img: image,
 }
 
 Piece := Rectangle {
@@ -13,6 +14,7 @@ Square := Rectangle {
     property <int> cx;
     property <int> cy;
     property <int> piece_id;
+    property <image> img_src;
 
     width: 128px;
     height: 128px;
@@ -30,18 +32,15 @@ Square := Rectangle {
     }
 
     Image {
+        source: root.img_src;
         width: root.width;
         height: root.height;
-        states [
-            wpawn when selected: {
-            }
-        ]
     }
 
 
     TouchArea {
         clicked => { 
-            root.selected = !root.selected;
+            // root.selected = !root.selected;
             root.clicked();
         }
     }
@@ -53,21 +52,21 @@ MainWindow := Window {
 
     title: "Chess";
 
-    callback clicked;
-    property <bool> first;
+    // index, x, y
+    callback clicked(int, int, int);
 
     property <[CellData]> cells: [];
     for cell[i] in cells : Square {
         cx: mod(i, 8);
-        cy: 7 - floor(i / 8);
+        cy: floor(i / 8);
         x: cx * 128px;
         y: cy * 128px;
         white: mod(cx + cy, 2) == 0;
-        clicked => { 
-            root.clicked(); 
-            if (root.first)  {
+        selected: cell.selected;
+        img_src: cell.img;
 
-            }
+        clicked => { 
+            root.clicked(i, cx, 7 - cy);
         }
     }
 }

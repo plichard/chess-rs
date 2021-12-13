@@ -1,7 +1,7 @@
 use std::iter::zip;
 
 use crate::piece::{Color, Piece, PieceIndex, Type};
-use crate::slotvec::StaticSlotVec;
+// use crate::slotvec::StaticSlotVec;
 use crate::utils::Position;
 use rand::rngs::ThreadRng;
 use std::cmp::Ordering;

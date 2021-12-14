@@ -9,6 +9,7 @@ use std::io::Write;
 use std::ops::{Neg, Shl};
 use std::process::Output;
 use termcolor::{ColorChoice, ColorSpec, WriteColor};
+use std::sync::mpsc::{SyncSender, Receiver};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Move {
@@ -131,7 +132,7 @@ impl Move {
 }
 
 #[derive(Copy, Clone)]
-struct Cell {
+pub struct Cell {
     piece: Option<Piece>,
     attacking_white_pieces: i8,
     attacking_black_pieces: i8,
@@ -279,11 +280,11 @@ impl Board {
         game.add_new_piece(Color::Black, Type::Bishop, 2, 7);
         game.add_new_piece(Color::Black, Type::Bishop, 5, 7);
 
-        // game.add_new_piece(Color::White, Type::Knight, 1, 0);
-        // game.add_new_piece(Color::White, Type::Knight, 6, 0);
+        game.add_new_piece(Color::White, Type::Knight, 1, 0);
+        game.add_new_piece(Color::White, Type::Knight, 6, 0);
 
-        // game.add_new_piece(Color::Black, Type::Knight, 1, 7);
-        // game.add_new_piece(Color::Black, Type::Knight, 6, 7);
+        game.add_new_piece(Color::Black, Type::Knight, 1, 7);
+        game.add_new_piece(Color::Black, Type::Knight, 6, 7);
 
         game
     }
@@ -362,6 +363,23 @@ impl Board {
         }
     }
 
+    pub fn find_best_move(&mut self, depth: i32, rx: Receiver<()>) -> Option<Move> {
+        let mut root_node: MoveNode = Move::evaluate(0).into();
+            let m = self.search(
+                depth,
+                Move::evaluate(-i32::MAX).into(),
+                Move::evaluate(i32::MAX).into(),
+                &mut root_node,
+                false,
+                &rx,
+            );
+            if !m.is_valid() {
+                return None;
+            }
+
+            return Some(m);
+    }
+
     pub fn search(
         &mut self,
         depth: i32,
@@ -369,7 +387,13 @@ impl Board {
         beta: Move,
         parent: &mut MoveNode,
         only_captures: bool,
+        rx: &Receiver<()>,
     ) -> Move {
+
+        if rx.try_recv().is_ok() {
+            return Move::evaluate(self.evaluate_position());
+        }
+
         if let Action::Capture { target, .. } = &parent.m.action {
             if target.t == Type::King {
                 return Move::evaluate(self.evaluate_position());
@@ -378,7 +402,7 @@ impl Board {
 
         if depth == 0 && !only_captures {
             // return Move::evaluate(self.evaluate_position());
-            return self.search(depth - 1, alpha, beta, parent, true);
+            return self.search(depth - 1, alpha, beta, parent, true, &rx);
         }
 
         // if depth == 0 {
@@ -406,7 +430,7 @@ impl Board {
 
         for m in moves {
             self.push_move(m.m);
-            let test_move = -self.search(depth - 1, -beta, -alpha, m, only_captures);
+            let test_move = -self.search(depth - 1, -beta, -alpha, m, only_captures, &rx);
             // println!("test move: {}", test_move.evaluation);
             self.pop_move();
 

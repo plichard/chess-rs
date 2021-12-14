@@ -14,8 +14,8 @@ Square := Rectangle {
     property <int> piece_id;
     property <image> img_src;
 
-    width: 128px;
-    height: 128px;
+    width: 64px;
+    height: 64px;
 
     
     Image {
@@ -54,6 +54,7 @@ MainWindow := Window {
     callback clicked(int, int);
     callback reset_game;
     callback compute_move;
+    callback undo;
 
     property <[CellData]> cells: [];
 
@@ -62,8 +63,8 @@ MainWindow := Window {
             for cell[i] in cells : Square {
                 cx: mod(i, 8);
                 cy: 7-floor(i / 8);
-                x: cx * 128px;
-                y: cy * 128px;
+                x: cx * 64px;
+                y: cy * 64px;
                 white: mod(cx + cy, 2) == 0;
                 selected: cell.selected;
                 img_src: cell.img;
@@ -72,8 +73,8 @@ MainWindow := Window {
                     root.clicked(cx, 7-cy);
                 }
             }
-            height: 8*128px;
-            width: 8*128px;
+            height: 8*64px;
+            width: 8*64px;
         }
         HorizontalLayout {
             Button {
@@ -85,6 +86,12 @@ MainWindow := Window {
                 text: "Compute";
                 height: 64px;
                 clicked => {root.compute_move();}
+            }
+
+            Button {
+                text: "Undo";
+                height: 64px;
+                clicked => {root.undo();}
             }
         }
     }

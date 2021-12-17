@@ -13,8 +13,8 @@ use std::sync::mpsc::{SyncSender, Receiver};
 
 #[derive(Copy, Clone, Debug)]
 pub struct Move {
-    score: i32,
-    action: Action,
+    pub score: i32,
+    pub action: Action,
 }
 
 impl Into<MoveNode> for Move {
@@ -36,10 +36,10 @@ impl MoveNode {
     pub fn recursive_children_count(&self) -> usize {
         self.children.len()
             + self
-                .children
-                .iter()
-                .map(|c| c.recursive_children_count())
-                .sum::<usize>()
+            .children
+            .iter()
+            .map(|c| c.recursive_children_count())
+            .sum::<usize>()
     }
 }
 
@@ -133,9 +133,9 @@ impl Move {
 
 #[derive(Copy, Clone)]
 pub struct Cell {
-    piece: Option<Piece>,
-    attacking_white_pieces: i8,
-    attacking_black_pieces: i8,
+    pub piece: Option<Piece>,
+    pub attacking_white_pieces: i8,
+    pub attacking_black_pieces: i8,
 }
 
 impl Cell {
@@ -164,6 +164,8 @@ pub struct Board {
 
     white_piece_count: i8,
     black_piece_count: i8,
+
+    move_count: i64,
 }
 
 impl Board {
@@ -186,53 +188,67 @@ impl Board {
 
             white_piece_count: 0,
             black_piece_count: 0,
+
+            move_count: 0,
         }
     }
 
-    pub fn execute_move_from_position(&mut self, x1: i8, y1: i8, x2: i8, y2: i8) -> bool {
+    pub fn state(&self) -> &[[Cell; 8]; 8] {
+        &self.cells
+    }
+
+    pub fn move_from_position(&mut self, x1: i8, y1: i8, x2: i8, y2: i8) -> Option<Move> {
         if x1 < 0 || x1 > 7 {
-            return false;
+            return None;
         }
 
         if y1 < 0 || y1 > 7 {
-            return false;
+            return None;
         }
 
         if x2 < 0 || x2 > 7 {
-            return false;
+            return None;
         }
 
         if y2 < 0 || y2 > 7 {
-            return false;
+            return None;
         }
 
         let p1 = Position::new(x1, y1);
         let p2 = Position::new(x2, y2);
 
         if let Some(piece) = self.piece_at(&p1) {
-            if piece.color == self.current_color() {
-            } else {
+            if piece.color == self.current_color() {} else {
                 println!("This is not your piece");
             }
         } else {
             println!("There is no piece there");
-            return false;
+            return None;
         }
 
         let piece = self.piece_at(&p1).unwrap();
 
-        if let Some(target) = self.piece_at(&p2) {
+        return if let Some(target) = self.piece_at(&p2) {
             if target.color != self.current_color() {
-                self.push_move(Move::capture_piece(piece, *target));
+                let m = Move::capture_piece(piece, *target);
+                Some(m)
             } else {
                 println!("Cannot capture your own piece");
-                return false;
+                None
             }
         } else {
-            self.push_move(Move::move_piece(piece, p2));
-        }
-
-        true
+            if piece.t == Type::Pawn {
+                if piece.color == Color::White && p2.y == 7 {
+                    Some(Move::promote(piece, p2, Type::Queen))
+                } else if piece.color == Color::Black && p2.y == 0 {
+                    Some(Move::promote(piece, p2, Type::Queen))
+                } else {
+                    Some(Move::move_piece(piece, p2))
+                }
+            } else {
+                Some(Move::move_piece(piece, p2))
+            }
+        };
     }
 
     pub fn parse_move(&mut self, msg: &String) -> bool {
@@ -247,7 +263,7 @@ impl Board {
         let x2 = char_to_n(msg[2]);
         let y2 = digit_to_n(msg[3]);
 
-        self.execute_move_from_position(x1, y1, x2, y2)
+        self.move_from_position(x1, y1, x2, y2).is_some()
     }
 
     pub fn new_promote_game() -> Self {
@@ -255,6 +271,17 @@ impl Board {
 
         game.add_new_piece(Color::White, Type::Pawn, 0, 1);
         game.add_new_piece(Color::Black, Type::Pawn, 7, 6);
+
+        game
+    }
+
+    pub fn new_two_pawn_game() -> Self {
+        let mut game = Board::new_empty_game();
+        game.add_new_piece(Color::White, Type::Pawn, 0, 1);
+        game.add_new_piece(Color::White, Type::Pawn, 5, 1);
+
+        game.add_new_piece(Color::Black, Type::Pawn, 1, 6);
+        game.add_new_piece(Color::Black, Type::Pawn, 5, 6);
 
         game
     }
@@ -364,20 +391,23 @@ impl Board {
     }
 
     pub fn find_best_move(&mut self, depth: i32, rx: Receiver<()>) -> Option<Move> {
+        self.move_count = 0;
         let mut root_node: MoveNode = Move::evaluate(0).into();
-            let m = self.search(
-                depth,
-                Move::evaluate(-i32::MAX).into(),
-                Move::evaluate(i32::MAX).into(),
-                &mut root_node,
-                false,
-                &rx,
-            );
-            if !m.is_valid() {
-                return None;
-            }
+        let m = self.search(
+            depth,
+            Move::evaluate(-i32::MAX).into(),
+            Move::evaluate(i32::MAX).into(),
+            &mut root_node,
+            false,
+            &rx,
+        );
+        if !m.is_valid() {
+            return None;
+        }
 
-            return Some(m);
+        println!("score = {}, move count = {}", m.score, self.move_count);
+
+        return Some(m);
     }
 
     pub fn search(
@@ -389,7 +419,6 @@ impl Board {
         only_captures: bool,
         rx: &Receiver<()>,
     ) -> Move {
-
         if rx.try_recv().is_ok() {
             return Move::evaluate(self.evaluate_position());
         }
@@ -401,8 +430,8 @@ impl Board {
         }
 
         if depth == 0 && !only_captures {
-            // return Move::evaluate(self.evaluate_position());
-            return self.search(depth - 1, alpha, beta, parent, true, &rx);
+            return Move::evaluate(self.evaluate_position());
+            // return self.search(depth - 1, alpha, beta, parent, true, &rx);
         }
 
         // if depth == 0 {
@@ -421,12 +450,14 @@ impl Board {
 
         self.sort_moves(&mut moves);
 
-        let moves = if only_captures {
-            &mut moves
-        } else {
-            parent.children = moves;
-            &mut parent.children
-        };
+        // let moves = if only_captures {
+        //     &mut moves
+        // } else {
+        //     parent.children = moves;
+        //     &mut parent.children
+        // };
+
+        let moves = &mut moves;
 
         for m in moves {
             self.push_move(m.m);
@@ -830,7 +861,7 @@ impl Board {
                 if piece.position.y == 6 {
                     if let None = self.piece_at(&piece.position.up(1).unwrap()) {
                         moves.push(
-                            Move::promote(*piece, piece.position.up(1).unwrap(), Type::Rook).into(),
+                            Move::promote(*piece, piece.position.up(1).unwrap(), Type::Queen).into(),
                         );
                     }
                 }
@@ -878,7 +909,7 @@ impl Board {
                 if piece.position.y == 1 {
                     if let None = self.piece_at(&piece.position.down(1).unwrap()) {
                         moves.push(
-                            Move::promote(*piece, piece.position.down(1).unwrap(), Type::Rook)
+                            Move::promote(*piece, piece.position.down(1).unwrap(), Type::Queen)
                                 .into(),
                         );
                     }
@@ -1095,6 +1126,7 @@ impl Board {
     pub fn push_move(&mut self, m: Move) {
         self.move_stack.push(m);
         self.make_move(m);
+        self.move_count += 1;
     }
 
     pub fn pop_move(&mut self) {

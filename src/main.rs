@@ -19,6 +19,7 @@ use std::task::{Context, Poll};
 use std::thread::{JoinHandle, spawn, Thread};
 use sfml::graphics::{Drawable, FloatRect, Shape, Transformable, View};
 use sfml::system::{Vector2f, Vector2i};
+use sfml::window::Key;
 use sfml::window::mouse::Button;
 // use sixtyfps::Model;
 use crate::utils::Position;
@@ -44,7 +45,7 @@ fn run_sfml_gui() {
     let mut settings = sfml::window::ContextSettings::default();
     settings.set_antialiasing_level(4);
 
-    let mut window = sfml::graphics::RenderWindow::new((200, 200), "Chess", Style::DEFAULT, &settings);
+    let mut window = sfml::graphics::RenderWindow::new((800, 800), "Chess", Style::DEFAULT, &settings);
 
     window.set_vertical_sync_enabled(true);
 
@@ -74,14 +75,14 @@ fn run_sfml_gui() {
     }
 
     let mut select_square = white_square.clone();
-    select_square.set_fill_color(sfml::graphics::Color::rgba(50, 255, 50, 50));
-    select_square.set_outline_color(sfml::graphics::Color::GREEN);
-    select_square.set_outline_thickness(2.0);
+    select_square.set_fill_color(sfml::graphics::Color::rgba(121, 156, 130, 70));
+    // select_square.set_outline_color(sfml::graphics::Color::GREEN);
+    // select_square.set_outline_thickness(2.0);
 
     let mut last_move_square = select_square.clone();
-    last_move_square.set_fill_color(sfml::graphics::Color::rgba(50, 50, 255, 50));
-    last_move_square.set_outline_color(sfml::graphics::Color::BLUE);
-    last_move_square.set_outline_thickness(2.0);
+    last_move_square.set_fill_color(sfml::graphics::Color::rgba(195, 216, 135, 70));
+    // last_move_square.set_outline_color(sfml::graphics::Color::BLUE);
+    // last_move_square.set_outline_thickness(2.0);
 
     let mut w_pawn = Sprite::with_texture(&w_pawn_tex);
     w_pawn.set_origin((-(128.0 - w_pawn_tex.size().x as f32) / 2.0, 0.0));
@@ -112,7 +113,7 @@ fn run_sfml_gui() {
         let (tx_stop, rx_stop) = sync_channel(1);
 
         let thread = std::thread::spawn(move || {
-            if let Some(m) = board.find_best_move(6, rx_stop) {
+            if let Some(m) = board.find_best_move(7, rx_stop) {
                 tx.send(Some(m));
             } else {
                 // println!("No valid move found");
@@ -123,6 +124,8 @@ fn run_sfml_gui() {
         return tx_stop;
     };
 
+    let mut do_compute = false;
+
 
     while window.is_open() {
         while let Some(event) = window.poll_event() {
@@ -130,34 +133,41 @@ fn run_sfml_gui() {
             match event {
                 Event::Closed => window.close(),
                 Event::MouseButtonPressed { button, x, y } => {
-                    if board.current_color() == Color::White {
-                        if button == Button::LEFT {
-                            let p = window.map_pixel_to_coords_current_view(Vector2i::new(x, y));
-                            let x = p.x as i32 / 128;
-                            let y = 7 - p.y as i32 / 128;
-                            let next = ((x, y));
-                            if let Some(v) = selected {
-                                if next != v {
-                                    if let Some(m) = board.move_from_position(v.0 as i8, v.1 as i8, next.0 as i8, next.1 as i8) {
-                                        last_move = Some(m);
-                                        board.push_move(m);
-                                        selected = None;
-                                    }
+                    if button == Button::LEFT {
+                        let p = window.map_pixel_to_coords_current_view(Vector2i::new(x, y));
+                        let x = p.x as i32 / 128;
+                        let y = 7 - p.y as i32 / 128;
+                        let next = ((x, y));
+                        if let Some(v) = selected {
+                            if next != v {
+                                if let Some(m) = board.move_from_position(v.0 as i8, v.1 as i8, next.0 as i8, next.1 as i8) {
+                                    last_move = Some(m);
+                                    board.push_move(m);
+                                    selected = None;
                                 }
-                            } else {
-                                selected = Some(next);
                             }
-                        } else if button == Button::RIGHT {
-                            selected = None;
+                        } else {
+                            selected = Some(next);
                         }
                     }
+
+
+                    if button == Button::RIGHT {
+                        selected = None;
+                    }
                 }
-                // Event::KeyPressed {  code, alt, ctrl, shift, system } => {
-                //     if code ==
-                // }
+                Event::KeyPressed { code, alt, ctrl, shift, system } => {
+                    if code == Key::LEFT {
+                        board.pop_move();
+                    } else if code == Key::SPACE {
+                        do_compute = true;
+                    }
+                }
                 _ => {}
             }
         }
+
+        let mut computing = false;
 
         if let Some(sender) = &stop_sender {
             if let Ok(m) = rx_result.try_recv() {
@@ -167,15 +177,17 @@ fn run_sfml_gui() {
                     stop_sender = None;
                     // stop_sender = Some(compute_move(&board, tx_result.clone()));
                 }
+            } else {
+                computing = true;
             }
-        } else if board.current_color() == Color::Black {
+        } else if do_compute {
             stop_sender = Some(compute_move(&board, tx_result.clone()));
+            do_compute = false;
         }
 
         window.clear(sfml::graphics::Color::rgb(0, 0, 0));
         window.set_view(&View::from_rect(&FloatRect::new(0.0, 0.0, 128.0 * 8.0, 128.0 * 8.0)));
 
-        let state = board.state();
         for y in 0..8 {
             for x in 0..8 {
                 let px = x as f32 * 128.0;
@@ -186,27 +198,6 @@ fn run_sfml_gui() {
                 } else {
                     white_square.set_position((px, py));
                     window.draw(&white_square);
-                }
-                if let Some(piece) = &state[x][y].piece {
-                    use Color::*;
-                    use Type::*;
-                    let sprite = match (piece.color, piece.t) {
-                        (White, Pawn) => &mut w_pawn,
-                        (Black, Pawn) => &mut b_pawn,
-                        (White, Rook) => &mut w_rook,
-                        (Black, Rook) => &mut b_rook,
-                        (White, Knight) => &mut w_knight,
-                        (Black, Knight) => &mut b_knight,
-                        (White, Bishop) => &mut w_bishop,
-                        (Black, Bishop) => &mut b_bishop,
-                        (White, Queen) => &mut w_queen,
-                        (Black, Queen) => &mut b_queen,
-                        (White, King) => &mut w_king,
-                        (Black, King) => &mut b_king,
-                    };
-
-                    sprite.set_position((px, py));
-                    window.draw(sprite);
                 }
             }
         }
@@ -245,6 +236,43 @@ fn run_sfml_gui() {
             let py = 128.0 * (7 - y) as f32;
             select_square.set_position((px, py));
             window.draw(&select_square);
+        }
+
+        let state = board.state();
+        for y in 0..8 {
+            for x in 0..8 {
+                let px = x as f32 * 128.0;
+                let py = (7 - y) as f32 * 128.0;
+                if let Some(piece) = &state[x][y].piece {
+                    use Color::*;
+                    use Type::*;
+                    let sprite = match (piece.color, piece.t) {
+                        (White, Pawn) => &mut w_pawn,
+                        (Black, Pawn) => &mut b_pawn,
+                        (White, Rook) => &mut w_rook,
+                        (Black, Rook) => &mut b_rook,
+                        (White, Knight) => &mut w_knight,
+                        (Black, Knight) => &mut b_knight,
+                        (White, Bishop) => &mut w_bishop,
+                        (Black, Bishop) => &mut b_bishop,
+                        (White, Queen) => &mut w_queen,
+                        (Black, Queen) => &mut b_queen,
+                        (White, King) => &mut w_king,
+                        (Black, King) => &mut b_king,
+                    };
+
+                    sprite.set_position((px, py));
+                    window.draw(sprite);
+                }
+            }
+        }
+
+
+        if computing {
+            status_text.set_string("Thinking...");
+            status_text.set_character_size(42);
+            status_text.set_fill_color(sfml::graphics::Color::rgb(50, 255, 50));
+            window.draw(&status_text);
         }
 
         window.display();

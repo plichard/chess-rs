@@ -434,15 +434,15 @@ impl Board {
         }
 
         if depth == 0 && !only_captures {
-            return Move::evaluate(self.evaluate_position());
-            // return self.search(depth - 1, alpha, beta, parent, true, &rx);
+            // return Move::evaluate(self.evaluate_position());
+            return self.search(depth - 1, alpha, beta, parent, true, &rx);
         }
 
         // if depth == 0 {
         //     return Move::evaluate(self.evaluate_position());
         // }
 
-        if only_captures && depth < -10 {
+        if only_captures && depth < -3 {
             // return Move{ score: 0, action: Action::Evaluation {score: self.evaluate_position()}};
             return Move::evaluate(self.evaluate_position());
         }

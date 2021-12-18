@@ -85,7 +85,7 @@ fn run_sfml_gui() {
     // last_move_square.set_outline_thickness(2.0);
 
     let mut legal_move_circle = sfml::graphics::CircleShape::new(128.0 / 4.0, 100);
-    legal_move_circle.set_fill_color(sfml::graphics::Color::rgba(121, 156, 130, 128));
+    legal_move_circle.set_fill_color(sfml::graphics::Color::rgba(16, 97, 38, 128));
     legal_move_circle.set_origin((-32.0, -32.0));
 
     let mut w_pawn = Sprite::with_texture(&w_pawn_tex);
@@ -117,7 +117,7 @@ fn run_sfml_gui() {
         let (tx_stop, rx_stop) = sync_channel(1);
 
         let thread = std::thread::spawn(move || {
-            if let Some(m) = board.find_best_move(7, rx_stop) {
+            if let Some(m) = board.find_best_move(6, rx_stop) {
                 tx.send(Some(m));
             } else {
                 // println!("No valid move found");

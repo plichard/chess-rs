@@ -11,7 +11,7 @@ use std::process::Output;
 use termcolor::{ColorChoice, ColorSpec, WriteColor};
 use std::sync::mpsc::{SyncSender, Receiver};
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Move {
     pub score: i32,
     pub action: Action,
@@ -43,7 +43,7 @@ impl MoveNode {
     }
 }
 
-#[derive(Copy, Clone, Debug)]
+#[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub enum Action {
     Evaluation { score: i32 },
     Move { from: Piece, to: Piece },
@@ -166,6 +166,8 @@ pub struct Board {
     black_piece_count: i8,
 
     move_count: i64,
+    white_king_move_count: i32,
+    black_king_move_count: i32,
 }
 
 impl Board {
@@ -190,6 +192,8 @@ impl Board {
             black_piece_count: 0,
 
             move_count: 0,
+            white_king_move_count: 0,
+            black_king_move_count: 0,
         }
     }
 
@@ -233,7 +237,7 @@ impl Board {
                 let m = Move::capture_piece(piece, *target);
                 Some(m)
             } else {
-                println!("Cannot capture your own piece");
+                // println!("Cannot capture your own piece");
                 None
             }
         } else {
@@ -611,7 +615,7 @@ impl Board {
         self.append_piece_moves(piece, &mut moves, false, false);
         return moves;
     }
-    
+
     pub fn collect_all_moves(
         &self,
         color: Color,
@@ -723,6 +727,12 @@ impl Board {
         if let Some(position) = piece.position.down_left(1) {
             try_position(position);
         }
+
+        // if piece.color == Color::White && self.white_king_move_count == 0 {
+        //     if self.piece_at(&Position::new(5, 0)).is_none() && self.piece_at(&Position::new(6, 0)).is_none() {
+        //         if let Some(maybe_rook) = self.piece_at(&Position::new(7, 0)) {}
+        //     }
+        // }
     }
 
     pub fn append_rook_moves(&self, piece: &Piece, moves: &mut Vec<MoveNode>, only_captures: bool) {
@@ -1083,6 +1093,13 @@ impl Board {
             Action::Move { from, to } => {
                 // self.remove_piece_attack(&from);
                 self.move_piece(from, to);
+                if from.t == Type::King {
+                    if from.color == Color::White {
+                        self.white_king_move_count += 1;
+                    } else {
+                        self.black_king_move_count += 1;
+                    }
+                }
                 // self.add_piece_attack(&to);
             }
             Action::Capture { piece, target } => {
@@ -1090,6 +1107,13 @@ impl Board {
                 // self.remove_piece_attack(&piece);
                 self.remove_piece(target);
                 self.move_piece(piece, piece.moved(target.position));
+                if piece.t == Type::King {
+                    if piece.color == Color::White {
+                        self.white_king_move_count += 1;
+                    } else {
+                        self.black_king_move_count += 1;
+                    }
+                }
                 // self.add_piece_attack(&piece.moved(target.position));
             }
             Action::Promote {
@@ -1109,12 +1133,26 @@ impl Board {
             Action::Move { from, to } => {
                 // self.remove_piece_attack(&to);
                 self.move_piece(to, from);
+                if from.t == Type::King {
+                    if from.color == Color::White {
+                        self.white_king_move_count -= 1;
+                    } else {
+                        self.black_king_move_count -= 1;
+                    }
+                }
                 // self.add_piece_attack(&from);
             }
             Action::Capture { piece, target } => {
                 // self.remove_piece_attack(&piece.moved(target.position));
                 self.move_piece(piece.moved(target.position), piece);
                 self.add_piece(target);
+                if piece.t == Type::King {
+                    if piece.color == Color::White {
+                        self.white_king_move_count -= 1;
+                    } else {
+                        self.black_king_move_count -= 1;
+                    }
+                }
                 // self.add_piece_attack(&target);
                 // self.add_piece_attack(&piece);
             }

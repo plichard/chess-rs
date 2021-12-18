@@ -145,16 +145,33 @@ fn run_sfml_gui() {
                         if let Some(v) = selected {
                             if next != v {
                                 if let Some(m) = board.move_from_position(v.0 as i8, v.1 as i8, next.0 as i8, next.1 as i8) {
-                                    last_move = Some(m);
-                                    board.push_move(m);
-                                    selected = None;
-                                    legal_moves.clear();
+                                    if legal_moves.contains(&m) {
+                                        last_move = Some(m);
+                                        board.push_move(m);
+                                        selected = None;
+                                        legal_moves.clear();
+                                    } else {
+                                        selected = None;
+                                        legal_moves.clear();
+                                    }
+                                } else {
+                                    if let Some(piece) = board.piece_at(&Position::new(next.0 as i8, next.1 as i8)) {
+                                        if piece.color == board.current_color() {
+                                            selected = Some(next);
+                                            legal_moves = board.collect_piece_moves(piece).into_iter().map(|m| m.m).collect();
+                                        }
+                                    } else {
+                                        selected = None;
+                                        legal_moves.clear();
+                                    }
                                 }
                             }
                         } else {
-                            selected = Some(next);
                             if let Some(piece) = board.piece_at(&Position::new(next.0 as i8, next.1 as i8)) {
-                                legal_moves = board.collect_piece_moves(piece);
+                                if piece.color == board.current_color() {
+                                    selected = Some(next);
+                                    legal_moves = board.collect_piece_moves(piece).into_iter().map(|m| m.m).collect();
+                                }
                             } else {
                                 selected = None;
                                 legal_moves.clear();
@@ -280,7 +297,7 @@ fn run_sfml_gui() {
         }
 
         for m in &legal_moves {
-            let (x, y) = match m.m.action {
+            let (x, y) = match m.action {
                 Action::Evaluation { .. } => { unreachable!() }
                 Action::Move { to, .. } => (to.position.x, to.position.y),
                 Action::Capture { target, .. } => (target.position.x, target.position.y),

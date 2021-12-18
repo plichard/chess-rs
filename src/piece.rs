@@ -18,7 +18,7 @@ pub enum Type {
 
 pub type PieceIndex = u8;
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq)]
 pub struct Piece {
     pub t: Type,
     pub position: Position,
@@ -104,6 +104,6 @@ impl Piece {
             }
         };
 
-        self.base_value()  + pos_value
+        self.base_value() + pos_value
     }
 }

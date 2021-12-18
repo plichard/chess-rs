@@ -606,13 +606,19 @@ impl Board {
         }
     }
 
+    pub fn collect_piece_moves(&self, piece: &Piece) -> Vec<MoveNode> {
+        let mut moves = Vec::with_capacity(14);
+        self.append_piece_moves(piece, &mut moves, false, false);
+        return moves;
+    }
+    
     pub fn collect_all_moves(
         &self,
         color: Color,
         only_captures: bool,
         include_control: bool,
     ) -> Vec<MoveNode> {
-        let mut moves = Vec::new();
+        let mut moves = Vec::with_capacity(30);
         let pieces = match color {
             Color::White => &self.white_pieces[0..self.used_white_pieces],
             Color::Black => &self.black_pieces[0..self.used_black_pieces],

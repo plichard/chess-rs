@@ -84,6 +84,10 @@ fn run_sfml_gui() {
     // last_move_square.set_outline_color(sfml::graphics::Color::BLUE);
     // last_move_square.set_outline_thickness(2.0);
 
+    let mut legal_move_circle = sfml::graphics::CircleShape::new(128.0 / 4.0, 100);
+    legal_move_circle.set_fill_color(sfml::graphics::Color::rgba(121, 156, 130, 128));
+    legal_move_circle.set_origin((-32.0, -32.0));
+
     let mut w_pawn = Sprite::with_texture(&w_pawn_tex);
     w_pawn.set_origin((-(128.0 - w_pawn_tex.size().x as f32) / 2.0, 0.0));
     let mut b_pawn = Sprite::with_texture(&b_pawn_tex);
@@ -125,7 +129,7 @@ fn run_sfml_gui() {
     };
 
     let mut do_compute = false;
-
+    let mut legal_moves = Vec::new();
 
     while window.is_open() {
         while let Some(event) = window.poll_event() {
@@ -144,16 +148,24 @@ fn run_sfml_gui() {
                                     last_move = Some(m);
                                     board.push_move(m);
                                     selected = None;
+                                    legal_moves.clear();
                                 }
                             }
                         } else {
                             selected = Some(next);
+                            if let Some(piece) = board.piece_at(&Position::new(next.0 as i8, next.1 as i8)) {
+                                legal_moves = board.collect_piece_moves(piece);
+                            } else {
+                                selected = None;
+                                legal_moves.clear();
+                            }
                         }
                     }
 
 
                     if button == Button::RIGHT {
                         selected = None;
+                        legal_moves.clear();
                     }
                 }
                 Event::KeyPressed { code, alt, ctrl, shift, system } => {
@@ -265,6 +277,20 @@ fn run_sfml_gui() {
                     window.draw(sprite);
                 }
             }
+        }
+
+        for m in &legal_moves {
+            let (x, y) = match m.m.action {
+                Action::Evaluation { .. } => { unreachable!() }
+                Action::Move { to, .. } => (to.position.x, to.position.y),
+                Action::Capture { target, .. } => (target.position.x, target.position.y),
+                Action::Promote { new_piece, .. } => (new_piece.position.x, new_piece.position.y)
+            };
+            let px = x as f32 * 128.0;
+            let py = (7 - y) as f32 * 128.0;
+
+            legal_move_circle.set_position((px, py));
+            window.draw(&legal_move_circle);
         }
 
 

@@ -1,3 +1,4 @@
+use std::fmt::{Debug, Display, Formatter};
 pub use super::piece2::*;
 
 #[derive(Copy, Clone)]
@@ -62,7 +63,7 @@ mod utils {
     use std::ops::{Index, IndexMut};
     use crate::board2::{PieceRef, Position, Piece};
 
-    #[derive(Clone)]
+    #[derive(PartialEq, Eq, Clone)]
     pub struct PieceList {
         pieces: [super::Piece; 32],
         used_white_pieces: usize,
@@ -117,7 +118,7 @@ mod utils {
         }
     }
 
-    #[derive(Clone)]
+    #[derive(PartialEq, Eq, Clone)]
     pub struct PieceBoard {
         piece_refs: [PieceRef; 64],
     }
@@ -145,7 +146,7 @@ mod utils {
     }
 }
 
-#[derive(Clone)]
+#[derive(PartialEq, Eq, Clone)]
 pub struct Board {
     board: utils::PieceBoard,
     pieces: utils::PieceList,
@@ -318,6 +319,36 @@ impl Board {
             }
             _ => todo!()
         }
+    }
+}
+
+// Formatting
+
+impl Debug for Board {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        let line = "+---+---+---+---+---+---+---+---+";
+        // write!(f, )
+        // for pref in self.board {
+        //     write!(f, "{}", "a");
+        // }
+        write!(f, "hello")
+    }
+}
+
+impl Display for Move {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        match self.action {
+            Action::None => write!(f, "<None>"),
+            Action::Move { start, end } => write!(f, "{} {}", start, end),
+            // Action::Capture { target } => {
+            //     write!(f, "{} {}", start, end)
+            // }
+            // Action::Promote { .. } => {}
+            // Action::CaptureAndPromote { .. } => {}
+            // Action::Castle => {}
+            _ => Ok(())
+        };
+        Ok(())
     }
 }
 

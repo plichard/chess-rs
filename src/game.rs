@@ -1,5 +1,6 @@
 use crate::board2::*;
 
+
 pub struct Game {
     board: Board,
     move_stack: Vec<Move>,
@@ -42,8 +43,10 @@ impl Game {
         while true {
             let (moves, buffer) = self.board.insert_all_moves(Color::White, &mut buffer[0..]);
             if moves.is_empty() {
+                println!("no more moves, breaking");
                 break;
             }
+            println!("pushing {}", moves[0]);
             self.push_move(moves[0]);
         }
 
@@ -52,12 +55,24 @@ impl Game {
 }
 
 
-// #[cfg(test)]
-// mod tests {
-//     #[test]
-//     fn classic_game() {
-//         use super::*;
-//         let mut game = Game::new_classic();
-//
-//     }
-// }
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn moves() {
+        use super::{Move, Game, Color};
+        let mut game = Game::new_pawn_only();
+        let mut buffer = vec![Move::none(); 1_000];
+        let board = game.board.clone();
+        while true {
+            let (moves, buffer) = game.board.insert_all_moves(Color::White, &mut buffer[0..]);
+            if moves.is_empty() {
+                break;
+            }
+            game.push_move(moves[0]);
+        }
+
+        while game.pop_move().is_some() {}
+
+        assert_eq!(board, game.board);
+    }
+}

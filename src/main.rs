@@ -334,6 +334,7 @@ fn main() {
 
     let mut game = Game::new_pawn_only();
     game.do_testing();
+
     // run_sfml_gui();
     return;
 }

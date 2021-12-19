@@ -60,7 +60,7 @@ impl Position {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub struct Piece {
     data: u8,
     // 3 bits type, 1 bit color, 1 bit active
@@ -84,7 +84,7 @@ impl Piece {
     }
 
     pub fn new(color: Color, t: Type, position: Position) -> Self {
-        let data = ((color as u8) << 3) + (t as u8);
+        let data = ((color as u8) << 3) + (t as u8) + 0b00010000;
 
         Self {
             data,
@@ -112,7 +112,7 @@ impl Piece {
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone)]
 pub struct PieceRef {
     index: u8,
 }

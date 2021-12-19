@@ -330,16 +330,10 @@ fn run_sfml_gui() {
 
 fn main() {
     use piece2::{Piece, Color, Type, Position};
-    dbg!(std::mem::size_of::<piece2::Piece>());
-    dbg!(std::mem::size_of::<piece2::PieceRef>());
+    use game::Game;
 
-    let pawn1 = piece2::Piece::new(
-        Color::White, Type::Pawn,
-        Position::new(0, 1),
-    );
-
-    println!("pawn1: {}", pawn1);
-
+    let mut game = Game::new_pawn_only();
+    game.do_testing();
     // run_sfml_gui();
     return;
 }

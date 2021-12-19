@@ -1,6 +1,6 @@
 pub use super::piece2::*;
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct Move {
     action: Action,
     piece_ref: PieceRef,
@@ -15,9 +15,25 @@ impl Move {
             score: 0,
         }
     }
+
+    pub fn new_move(piece_ref: PieceRef, start: Position, end: Position) -> Move {
+        Move {
+            piece_ref,
+            action: Action::Move { start, end },
+            score: 0,
+        }
+    }
+
+    pub fn new_capture(piece_ref: PieceRef, target_ref: PieceRef) -> Move {
+        Move {
+            piece_ref,
+            action: Action::Capture { target: target_ref },
+            score: 0,
+        }
+    }
 }
 
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 enum Action {
     None,
     Move {
@@ -161,9 +177,17 @@ impl Board {
     pub fn insert_all_moves<'a>(&self, color: Color, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
         let (mut moves, mut buffer) = buffer.split_at_mut(0);
         if color == Color::White {
-            for p in self.pieces.white() {
+            for (i, p) in self.pieces.white().iter().enumerate() {
+                let pref = PieceRef::new(color, i);
                 if p.active() {
-                    (moves, buffer) = self.insert_piece_moves(p, buffer);
+                    (moves, buffer) = self.insert_piece_moves(pref, p, buffer);
+                }
+            }
+        } else {
+            for (i, p) in self.pieces.black().iter().enumerate() {
+                let pref = PieceRef::new(color, i);
+                if p.active() {
+                    (moves, buffer) = self.insert_piece_moves(pref, p, buffer);
                 }
             }
         }
@@ -171,15 +195,77 @@ impl Board {
         (moves, buffer)
     }
 
-    pub fn insert_piece_moves<'a>(&self, piece: &Piece, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
+    pub fn insert_piece_moves<'a>(&self, pref: PieceRef, piece: &Piece, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
         match piece.t() {
-            Type::Pawn => self.insert_pawn_moves(piece, buffer),
+            Type::Pawn => self.insert_pawn_moves(pref, piece, buffer),
             _ => buffer.split_at_mut(0)
         }
     }
 
-    pub fn insert_pawn_moves<'a>(&self, pawn: &Piece, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
-        buffer.split_at_mut(0)
+    pub fn insert_pawn_moves<'a>(&self, pref: PieceRef, pawn: &Piece, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
+        let mut count = 0;
+        let p = pawn.position;
+
+        if pawn.color() == Color::White {
+            if p.y() < 7 {
+                if !self.board[p.dp(0, 1)].active() {
+                    buffer[count] = Move::new_move(pref, p, p.dp(0, 1));
+                    count += 1;
+
+                    if p.y() == 1 && !self.board[p.dp(0, 2)].active() {
+                        buffer[count] = Move::new_move(pref, p, p.dp(0, 2));
+                        count += 1;
+                    }
+                }
+
+                if p.x() > 0 {
+                    let target_ref = self.board[p.dp(-1, 1)];
+                    if target_ref.active() && target_ref.color() == Color::Black {
+                        buffer[count] = Move::new_capture(pref, target_ref);
+                        count += 1;
+                    }
+                }
+
+                if p.x() < 7 {
+                    let target_ref = self.board[p.dp(1, 1)];
+                    if target_ref.active() && target_ref.color() == Color::Black {
+                        buffer[count] = Move::new_capture(pref, target_ref);
+                        count += 1;
+                    }
+                }
+            }
+        } else {
+            if p.y() > 0 {
+                if !self.board[p.dp(0, -1)].active() {
+                    buffer[count] = Move::new_move(pref, p, p.dp(0, -1));
+                    count += 1;
+
+                    if p.y() == 6 && !self.board[p.dp(0, -2)].active() {
+                        buffer[count] = Move::new_move(pref, p, p.dp(0, -2));
+                        count += 1;
+                    }
+                }
+
+                if p.x() > 0 {
+                    let target_ref = self.board[p.dp(-1, -1)];
+                    if target_ref.active() && target_ref.color() == Color::White {
+                        buffer[count] = Move::new_capture(pref, target_ref);
+                        count += 1;
+                    }
+                }
+
+                if p.x() < 7 {
+                    let target_ref = self.board[p.dp(1, -1)];
+                    if target_ref.active() && target_ref.color() == Color::White {
+                        buffer[count] = Move::new_capture(pref, target_ref);
+                        count += 1;
+                    }
+                }
+            }
+        }
+
+        let (mut moves, mut buffer) = buffer.split_at_mut(count);
+        (moves, buffer)
     }
 
 

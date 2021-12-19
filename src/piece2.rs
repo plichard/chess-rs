@@ -43,6 +43,14 @@ impl Position {
         }
     }
 
+    pub fn dp(&self, dx: i8, dy: i8) -> Self {
+        let index = self.index as i8 + dx + dy * 8;
+        debug_assert!(index >= 0 && index < 64);
+        Self {
+            index: index as u8
+        }
+    }
+
     pub fn x(&self) -> i8 {
         (self.index & 0b111) as i8
     }

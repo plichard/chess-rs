@@ -5,11 +5,22 @@ use crate::piece::{Color, Piece, PieceIndex, Type};
 use crate::utils::Position;
 use rand::rngs::ThreadRng;
 use std::cmp::Ordering;
-use std::io::Write;
+use std::io::{Empty, Write};
 use std::ops::{Neg, Shl};
 use std::process::Output;
 use termcolor::{ColorChoice, ColorSpec, WriteColor};
 use std::sync::mpsc::{SyncSender, Receiver};
+
+use bitflags::bitflags;
+
+bitflags! {
+    struct MoveFlags : u8 {
+        const EMPTY = 0b0000;
+        const KING_MOVED = 0b0001;
+        const KING_ROOK_MOVED = 0b0010;
+        const QUEEN_ROOK_MOVED = 0b0100;
+    }
+}
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Move {
@@ -66,9 +77,9 @@ impl Move {
     pub fn value(&self) -> i32 {
         match self.action {
             Action::Move { .. } => 0,
-            Action::Capture { piece, target } => target.value() * 10 - piece.value(),
+            Action::Capture { piece, target } => target.value() / 8 - piece.value() / 16,
             Action::Evaluation { score } => score,
-            Action::Promote { new_piece, .. } => new_piece.value() * 10,
+            Action::Promote { new_piece, .. } => new_piece.value(),
         }
     }
 
@@ -78,6 +89,28 @@ impl Move {
             action: Action::Evaluation { score },
         }
     }
+
+    // fn add_castle_flags(&mut self, board: &Board) {
+    //     let mut flags = self.flags;
+    //     if piece.color == Color::White && !board.white_castle.king_moved {
+    //         if !board.white_castle.queen_rook_moved && piece.position == Position::new(0, 0) {
+    //             flags |= MoveFlags::QUEEN_ROOK_MOVED;
+    //         } else if !board.white_castle.king_rook_moved && piece.position == Position::new(7, 0) {
+    //             flags |= MoveFlags::KING_ROOK_MOVED;
+    //         } else if !board.white_castle.king_moved && piece.position == Position::new(4, 0) {
+    //             flags |= MoveFlags::KING_MOVED;
+    //         }
+    //     } else if piece.color == Color::Black && !board.black_castle.king_moved {
+    //         if !board.black_castle.queen_rook_moved && piece.position == Position::new(0, 7) {
+    //             flags |= MoveFlags::QUEEN_ROOK_MOVED;
+    //         } else if !board.black_castle.king_rook_moved && piece.position == Position::new(7, 7) {
+    //             flags |= MoveFlags::KING_ROOK_MOVED;
+    //         } else if !board.black_castle.king_moved && piece.position == Position::new(4, 7) {
+    //             flags |= MoveFlags::KING_MOVED;
+    //         }
+    //     }
+    //     self.flags = flags;
+    // }
 
     pub fn capture_piece(piece: Piece, target: Piece) -> Self {
         Self {
@@ -149,6 +182,23 @@ impl Cell {
 }
 
 #[derive(Clone)]
+struct CastleRights {
+    king_moved: bool,
+    king_rook_moved: bool,
+    queen_rook_moved: bool,
+}
+
+impl CastleRights {
+    pub fn new() -> Self {
+        Self {
+            king_moved: false,
+            king_rook_moved: false,
+            queen_rook_moved: false,
+        }
+    }
+}
+
+#[derive(Clone)]
 pub struct Board {
     white_pieces: [Option<Piece>; 16],
     black_pieces: [Option<Piece>; 16],
@@ -166,8 +216,9 @@ pub struct Board {
     black_piece_count: i8,
 
     move_count: i64,
-    white_king_move_count: i32,
-    black_king_move_count: i32,
+
+    white_castle: CastleRights,
+    black_castle: CastleRights,
 }
 
 impl Board {
@@ -192,8 +243,8 @@ impl Board {
             black_piece_count: 0,
 
             move_count: 0,
-            white_king_move_count: 0,
-            black_king_move_count: 0,
+            white_castle: CastleRights::new(),
+            black_castle: CastleRights::new(),
         }
     }
 
@@ -1093,13 +1144,7 @@ impl Board {
             Action::Move { from, to } => {
                 // self.remove_piece_attack(&from);
                 self.move_piece(from, to);
-                if from.t == Type::King {
-                    if from.color == Color::White {
-                        self.white_king_move_count += 1;
-                    } else {
-                        self.black_king_move_count += 1;
-                    }
-                }
+
                 // self.add_piece_attack(&to);
             }
             Action::Capture { piece, target } => {
@@ -1107,13 +1152,7 @@ impl Board {
                 // self.remove_piece_attack(&piece);
                 self.remove_piece(target);
                 self.move_piece(piece, piece.moved(target.position));
-                if piece.t == Type::King {
-                    if piece.color == Color::White {
-                        self.white_king_move_count += 1;
-                    } else {
-                        self.black_king_move_count += 1;
-                    }
-                }
+
                 // self.add_piece_attack(&piece.moved(target.position));
             }
             Action::Promote {
@@ -1133,26 +1172,14 @@ impl Board {
             Action::Move { from, to } => {
                 // self.remove_piece_attack(&to);
                 self.move_piece(to, from);
-                if from.t == Type::King {
-                    if from.color == Color::White {
-                        self.white_king_move_count -= 1;
-                    } else {
-                        self.black_king_move_count -= 1;
-                    }
-                }
+
                 // self.add_piece_attack(&from);
             }
             Action::Capture { piece, target } => {
                 // self.remove_piece_attack(&piece.moved(target.position));
                 self.move_piece(piece.moved(target.position), piece);
                 self.add_piece(target);
-                if piece.t == Type::King {
-                    if piece.color == Color::White {
-                        self.white_king_move_count -= 1;
-                    } else {
-                        self.black_king_move_count -= 1;
-                    }
-                }
+
                 // self.add_piece_attack(&target);
                 // self.add_piece_attack(&piece);
             }

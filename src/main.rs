@@ -1,11 +1,13 @@
 #![feature(iter_zip)]
 #![feature(thread_is_running)]
+#![feature(step_trait)]
+#![feature(destructuring_assignment)]
 
 use std::borrow::BorrowMut;
 use crate::board::{Action, Board, Move, MoveNode};
 use crate::piece::{Color, Piece, Type};
 use rand::Rng;
-use std::cmp::Ordering;
+use std::cmp::{max_by, Ordering};
 use std::error::Error;
 use std::io;
 use std::io::{stdin, stdout, Write};
@@ -22,12 +24,15 @@ use sfml::system::{Vector2f, Vector2i};
 use sfml::window::Key;
 use sfml::window::mouse::Button;
 // use sixtyfps::Model;
-use crate::utils::Position;
+use crate::utils::{Position};
 
 mod board;
 mod piece;
 // mod slotvec;
 mod utils;
+mod piece2;
+mod board2;
+mod game;
 
 fn run_sfml_gui() {
     use sfml::window::{Style, VideoMode};
@@ -322,7 +327,19 @@ fn run_sfml_gui() {
     }
 }
 
+
 fn main() {
-    run_sfml_gui();
+    use piece2::{Piece, Color, Type, Position};
+    dbg!(std::mem::size_of::<piece2::Piece>());
+    dbg!(std::mem::size_of::<piece2::PieceRef>());
+
+    let pawn1 = piece2::Piece::new(
+        Color::White, Type::Pawn,
+        Position::new(0, 1),
+    );
+
+    println!("pawn1: {}", pawn1);
+
+    // run_sfml_gui();
     return;
 }

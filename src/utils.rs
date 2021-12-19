@@ -1,3 +1,6 @@
+use std::fmt::{Debug, Display, Formatter, Pointer};
+use std::iter::Step;
+
 #[derive(Copy, Clone, Debug, Eq, PartialEq)]
 pub struct Position {
     pub x: i8,

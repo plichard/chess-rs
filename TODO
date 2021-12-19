@@ -1,0 +1,65 @@
+Minimal representation
+
+PIECE:
+------
+- 6 types (Pawn, Rook, Knight, Bishop, Queen, King) : 3 bits   | 4 bits, aligned to 1 byte
+- 2 colors                                          : 1 bit    |
+- 64 positions                                      : 8 bits
+-> 2 bytes
+
+PIECE REF:
+----------
+- 16 values per color       : 4 bits  | index into array of 32
+- 2 colors                  : 1 bit   |
+- 2 states, present or not  : 1 bit
+-> 6 bits, aligned to 1 byte
+
+BOARD:
+------
+64 refs -> 64 bytes = 1 cache line
+
+PIECE LIST:
+-----------
+32 pieces -> 64 bytes = 1 cache line
+
+
+======== ACTIONS ========
+
+> The important part here is that everything component is aligned to 1 byte
+All the actions have a common first piece ref
+
+MOVE:
+-----
+- piece ref
+- start position : needed when reverting the action
+- end position : needed when making the action
+-> 3 bytes
+
+CAPTURE:
+--------
+- piece ref
+- target ref
+-> 2 bytes
+
+Start and end positions are contained in the two pieces.
+- when making the action, swap positions and make the target inactive
+- when reverting the action, swap positions and make target active
+
+PROMOTE:
+--------
+- piece ref
+- promote type
+- target position (the previous position is always y +- 1 depending on color)
+-> 3 bytes
+
+CAPTURE and PROMOTE:
+--------------------
+- piece ref  | (no positions, same concept as capture)
+- target ref |
+- promote type
+-> 3 bytes
+
+CASTLE:
+-------
+- piece ref, used tower
+-> 1 byte

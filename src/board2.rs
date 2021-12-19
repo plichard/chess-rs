@@ -32,6 +32,22 @@ impl Move {
             score: 0,
         }
     }
+
+    pub fn new_promote(piece_ref: PieceRef, t: Type, end: Position) -> Move {
+        Move {
+            piece_ref,
+            action: Action::Promote { t, end },
+            score: 0,
+        }
+    }
+
+    pub fn new_capture_and_promote(piece_ref: PieceRef, target: PieceRef, t: Type) -> Move {
+        Move {
+            piece_ref,
+            action: Action::CaptureAndPromote { t, target },
+            score: 0,
+        }
+    }
 }
 
 #[derive(Copy, Clone)]
@@ -81,7 +97,6 @@ mod utils {
 
         pub fn add_new_piece(&mut self, piece: Piece) -> PieceRef {
             let color = piece.color();
-            PieceRef::new(color, self.used_white_pieces);
             if color == super::Color::White {
                 assert!(self.used_white_pieces < 16);
                 self.pieces[self.used_white_pieces] = piece;
@@ -89,7 +104,7 @@ mod utils {
                 PieceRef::new(color, self.used_white_pieces - 1)
             } else {
                 assert!(self.used_black_pieces < 16);
-                self.pieces[self.used_black_pieces] = piece;
+                self.pieces[self.used_black_pieces + 16] = piece;
                 self.used_black_pieces += 1;
                 PieceRef::new(color, self.used_black_pieces - 1)
             }
@@ -117,6 +132,7 @@ mod utils {
             &mut self.pieces[piece_ref.index()]
         }
     }
+
 
     #[derive(PartialEq, Eq, Clone)]
     pub struct PieceBoard {
@@ -175,40 +191,43 @@ impl Board {
         }
     }
 
-    pub fn insert_all_moves<'a>(&self, color: Color, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
-        let (mut moves, mut buffer) = buffer.split_at_mut(0);
+    pub fn insert_all_moves<'a>(&self, color: Color, buffer: &'a mut [Move]) -> usize {
+        let mut count = 0;
         if color == Color::White {
             for (i, p) in self.pieces.white().iter().enumerate() {
                 let pref = PieceRef::new(color, i);
                 if p.active() {
-                    (moves, buffer) = self.insert_piece_moves(pref, p, buffer);
+                    count += self.insert_piece_moves(pref, p, &mut buffer[count..]);
                 }
             }
         } else {
             for (i, p) in self.pieces.black().iter().enumerate() {
                 let pref = PieceRef::new(color, i);
                 if p.active() {
-                    (moves, buffer) = self.insert_piece_moves(pref, p, buffer);
+                    count += self.insert_piece_moves(pref, p, &mut buffer[count..]);
                 }
             }
         }
 
-        (moves, buffer)
+        count
     }
 
-    pub fn insert_piece_moves<'a>(&self, pref: PieceRef, piece: &Piece, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
+    pub fn insert_piece_moves<'a>(&self, pref: PieceRef, piece: &Piece, buffer: &'a mut [Move]) -> usize {
+        let mut count = 0;
         match piece.t() {
-            Type::Pawn => self.insert_pawn_moves(pref, piece, buffer),
-            _ => buffer.split_at_mut(0)
+            Type::Pawn => count += self.insert_pawn_moves(pref, piece, &mut buffer[count..]),
+            _ => {}
         }
+
+        count
     }
 
-    pub fn insert_pawn_moves<'a>(&self, pref: PieceRef, pawn: &Piece, buffer: &'a mut [Move]) -> (&'a mut [Move], &'a mut [Move]) {
+    pub fn insert_pawn_moves<'a>(&self, pref: PieceRef, pawn: &Piece, buffer: &'a mut [Move]) -> usize {
         let mut count = 0;
         let p = pawn.position;
 
         if pawn.color() == Color::White {
-            if p.y() < 7 {
+            if p.y() < 6 {
                 if !self.board[p.dp(0, 1)].active() {
                     buffer[count] = Move::new_move(pref, p, p.dp(0, 1));
                     count += 1;
@@ -234,9 +253,31 @@ impl Board {
                         count += 1;
                     }
                 }
+            } else if p.y() == 6 {
+                // promotions
+                if !self.board[p.dp(0, 1)].active() {
+                    buffer[count] = Move::new_promote(pref, Type::Queen, p.dp(0, 1));
+                    count += 1;
+                }
+
+                if p.x() > 0 {
+                    let target_ref = self.board[p.dp(-1, 1)];
+                    if target_ref.active() && target_ref.color() == Color::Black {
+                        buffer[count] = Move::new_capture_and_promote(pref, target_ref, Type::Queen);
+                        count += 1;
+                    }
+                }
+
+                if p.x() < 7 {
+                    let target_ref = self.board[p.dp(1, 1)];
+                    if target_ref.active() && target_ref.color() == Color::Black {
+                        buffer[count] = Move::new_capture_and_promote(pref, target_ref, Type::Queen);
+                        count += 1;
+                    }
+                }
             }
         } else {
-            if p.y() > 0 {
+            if p.y() > 1 {
                 if !self.board[p.dp(0, -1)].active() {
                     buffer[count] = Move::new_move(pref, p, p.dp(0, -1));
                     count += 1;
@@ -262,11 +303,32 @@ impl Board {
                         count += 1;
                     }
                 }
+            } else if p.y() == 1 {
+                // promotions
+                if !self.board[p.dp(0, -1)].active() {
+                    buffer[count] = Move::new_promote(pref, Type::Queen, p.dp(0, -1));
+                    count += 1;
+                }
+
+                if p.x() > 0 {
+                    let target_ref = self.board[p.dp(-1, -1)];
+                    if target_ref.active() && target_ref.color() == Color::White {
+                        buffer[count] = Move::new_capture_and_promote(pref, target_ref, Type::Queen);
+                        count += 1;
+                    }
+                }
+
+                if p.x() < 7 {
+                    let target_ref = self.board[p.dp(1, -1)];
+                    if target_ref.active() && target_ref.color() == Color::White {
+                        buffer[count] = Move::new_capture_and_promote(pref, target_ref, Type::Queen);
+                        count += 1;
+                    }
+                }
             }
         }
 
-        let (mut moves, mut buffer) = buffer.split_at_mut(count);
-        (moves, buffer)
+        count
     }
 
 
@@ -276,7 +338,7 @@ impl Board {
                 debug_assert!(self.piece_at(end).is_none());
                 debug_assert_eq!(self.piece_at(start).unwrap().position, start);
                 self.board[end] = m.piece_ref;
-                self.board[start].set_active(false);
+                self.board[start] = PieceRef::null();
                 self.pieces[m.piece_ref].position = end;
             }
             Action::Capture { target } => {
@@ -287,12 +349,41 @@ impl Board {
                 // swap positions
                 self.pieces[m.piece_ref].position = end;
                 self.pieces[target].position = start;
+                self.pieces[target].set_active(false);
 
                 // update board
                 self.board[end] = m.piece_ref;
-                self.board[start].set_active(false);
+                self.board[start] = PieceRef::null();
             }
-            _ => todo!()
+            Action::Promote { t, end } => {
+                let start = self.pieces[m.piece_ref].position;
+
+                // move the piece
+                self.board[end] = m.piece_ref;
+                self.board[start] = PieceRef::null();
+
+                // change the type
+                self.pieces[m.piece_ref].set_type(t);
+            }
+            Action::CaptureAndPromote { target, t } => {
+                // copy positions
+                let start = self.pieces[m.piece_ref].position;
+                let end = self.pieces[target].position;
+
+                // swap positions
+                self.pieces[m.piece_ref].position = end;
+                self.pieces[target].position = start;
+                self.pieces[target].set_active(false);
+
+                // update board
+                self.board[end] = m.piece_ref;
+                self.board[start] = PieceRef::null();
+
+                // change the type
+                self.pieces[m.piece_ref].set_type(t);
+            }
+            Action::None => unreachable!(),
+            Action::Castle => unreachable!()
         }
     }
 
@@ -302,7 +393,7 @@ impl Board {
                 debug_assert!(self.piece_at(start).is_none());
                 debug_assert_eq!(self.piece_at(end).unwrap().position, end);
                 self.board[start] = m.piece_ref;
-                self.board[end].set_active(false);
+                self.board[end] = PieceRef::null();
                 self.pieces[m.piece_ref].position = start;
             }
             Action::Capture { target } => {
@@ -312,12 +403,42 @@ impl Board {
                 // swap back positions
                 self.pieces[m.piece_ref].position = start;
                 self.pieces[target].position = end;
+                self.pieces[target].set_active(true);
 
                 // update board
                 self.board[start] = m.piece_ref;
                 self.board[end] = target;
             }
-            _ => todo!()
+            Action::Promote { t, end } => {
+                let start = if m.piece_ref.color() == Color::White {
+                    end.dp(0, -1)
+                } else {
+                    end.dp(0, 1)
+                };
+
+                self.board[start] = m.piece_ref;
+                self.board[end] = PieceRef::null();
+
+                self.pieces[m.piece_ref].set_type(Type::Pawn);
+            }
+            Action::CaptureAndPromote { target, .. } => {
+                let end = self.pieces[m.piece_ref].position;
+                let start = self.pieces[target].position;
+
+                // swap back positions
+                self.pieces[m.piece_ref].position = start;
+                self.pieces[target].position = end;
+                self.pieces[target].set_active(true);
+
+                // update board
+                self.board[start] = m.piece_ref;
+                self.board[end] = target;
+
+                // change back the type
+                self.pieces[m.piece_ref].set_type(Type::Pawn);
+            }
+            Action::None => unreachable!(),
+            Action::Castle => unreachable!()
         }
     }
 }
@@ -327,11 +448,16 @@ impl Board {
 impl Debug for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
         let line = "+---+---+---+---+---+---+---+---+";
-        // write!(f, )
-        // for pref in self.board {
-        //     write!(f, "{}", "a");
-        // }
-        write!(f, "hello")
+        writeln!(f, "{}", line);
+        for y in 0..8 {
+            println!("");
+            for x in 0..8 {
+                let p = Position::new(x, y);
+                let piece = self.board[p];
+            }
+            writeln!(f, "{}", line);
+        }
+        Ok(())
     }
 }
 
@@ -355,12 +481,34 @@ impl Display for Move {
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use super::utils::*;
+
     #[test]
-    fn add_piece1() {
+    fn piece_list_add_piece() {
+        let mut piece_list = PieceList::new();
+        let piece = Piece::new(Color::Black, Type::Rook, Position::new(1, 1));
+        let pref = piece_list.add_new_piece(piece);
+        assert_eq!(pref.color(), piece.color());
+        assert_eq!(piece_list[pref], piece);
+    }
+
+    #[test]
+    fn add_black_piece() {
         use super::{Piece, Position, Color, Type, Board};
         let mut board = Board::new();
-        board.add_new_piece(Color::Black, Type::Rook, 5, 6);
-        assert!(board.piece_at(Position::new(5, 6)).is_some());
-        assert!(board.piece_at(Position::new(5, 7)).is_none());
+        let p = Position::new(1, 1);
+        board.add_new_piece(Color::Black, Type::Rook, p.x(), p.y());
+
+        let piece_ref = board.board[p];
+        assert!(piece_ref.active());
+        assert_eq!(piece_ref.color(), Color::Black);
+
+        assert!(board.piece_at(p).is_some());
+
+        let piece = board.piece_at(p).unwrap();
+        assert_eq!(piece.color(), Color::Black);
+        assert_eq!(piece.t(), Type::Rook);
+        assert_eq!(piece.position, p);
     }
 }

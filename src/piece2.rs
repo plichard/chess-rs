@@ -1,5 +1,6 @@
 use std::fmt::{Debug, Display, Formatter};
 use sfml::audio::listener::position;
+use crate::piece2::Color::White;
 
 #[repr(u8)]
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -20,6 +21,11 @@ pub enum Color {
     Black = 1,
 }
 
+impl Color {
+    pub fn other(&self) -> Self {
+        if self == &Self::White { Self::Black } else { Self::White }
+    }
+}
 
 #[derive(Copy, Clone, PartialOrd, PartialEq, Eq)]
 pub struct Position {
@@ -110,6 +116,11 @@ impl Piece {
             self.data &= 0b11101111;
         }
     }
+
+    pub fn set_type(&mut self, t: Type) {
+        let mask = 0b111;
+        self.data = (self.data & !mask) | (t as u8 & mask);
+    }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]
@@ -145,13 +156,13 @@ impl PieceRef {
         }
     }
 
-    pub fn set_active(&mut self, active: bool) {
-        if active {
-            self.index |= 0b00100000;
-        } else {
-            self.index &= 0b11011111;
-        }
-    }
+    // pub fn set_active(&mut self, active: bool) {
+    //     if active {
+    //         self.index |= 0b00100000;
+    //     } else {
+    //         self.index &= 0b11011111;
+    //     }
+    // }
 }
 
 
@@ -199,14 +210,35 @@ impl Display for Piece {
     }
 }
 
+impl Debug for Piece {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} {} ({})", self.color(), self.t(), self.position)
+    }
+}
+
+impl Display for PieceRef {
+    fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{} @{}", self.color(), self.index())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     #[test]
-    fn create_piece1() {
+    fn create_white_piece() {
         use super::{Piece, Position, Color, Type};
         let rook1 = Piece::new(Color::White, Type::Rook, Position::new(3, 4));
         assert_eq!(rook1.t(), Type::Rook);
         assert_eq!(rook1.color(), Color::White);
+        assert_eq!(format!("{}", rook1.position), "d5");
+    }
+
+    #[test]
+    fn create_black_piece() {
+        use super::{Piece, Position, Color, Type};
+        let rook1 = Piece::new(Color::Black, Type::Rook, Position::new(3, 4));
+        assert_eq!(rook1.t(), Type::Rook);
+        assert_eq!(rook1.color(), Color::Black);
         assert_eq!(format!("{}", rook1.position), "d5");
     }
 

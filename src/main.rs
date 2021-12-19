@@ -329,11 +329,11 @@ fn run_sfml_gui() {
 
 
 fn main() {
-    use piece2::{Piece, Color, Type, Position};
-    use game::Game;
-
-    let mut game = Game::new_pawn_only();
-    game.do_testing();
+    // use piece2::{Piece, Color, Type, Position};
+    // use game::Game;
+    //
+    // let mut game = Game::new_pawn_only();
+    // game.do_testing();
 
     // run_sfml_gui();
     return;

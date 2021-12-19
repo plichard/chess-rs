@@ -17,7 +17,7 @@ impl Game {
 
     pub fn new_pawn_only() -> Game {
         let mut game = Game::new_empty();
-        for x in 0..7 {
+        for x in 0..8 {
             game.board.add_new_piece(Color::White, Type::Pawn, x, 1);
             game.board.add_new_piece(Color::Black, Type::Pawn, x, 6);
         }
@@ -38,38 +38,88 @@ impl Game {
         maybe_move
     }
 
-    pub fn do_testing(&mut self) {
-        let mut buffer = vec![Move::none(); 1_000];
-        while true {
-            let (moves, buffer) = self.board.insert_all_moves(Color::White, &mut buffer[0..]);
-            if moves.is_empty() {
-                println!("no more moves, breaking");
-                break;
-            }
-            println!("pushing {}", moves[0]);
-            self.push_move(moves[0]);
-        }
+    pub fn add_piece(&mut self, color: Color, t: Type, x: i8, y: i8) {
+        self.board.add_new_piece(color, t, x, y);
+    }
 
-        while self.pop_move().is_some() {}
+    pub fn get_all_moves(&self, color: Color) -> Vec<Move> {
+        let mut moves = vec![Move::none(); 1000];
+        let count = self.board.insert_all_moves(color, &mut moves[0..]);
+        Vec::from(&moves[0..count])
+    }
+
+    pub fn board(&self) -> &Board {
+        &self.board
     }
 }
 
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+
     #[test]
-    fn moves() {
-        use super::{Move, Game, Color};
+    fn move_piece() {
+        let mut game = Game::new_empty();
+        game.add_piece(Color::White, Type::Pawn, 1, 2);
+
+        let moves = game.get_all_moves(Color::White);
+        assert_eq!(moves.len(), 1);
+        assert!(game.board().piece_at(Position::new(1, 2)).is_some());
+        game.push_move(moves[0]);
+        assert!(game.board().piece_at(Position::new(1, 2)).is_none());
+        game.pop_move();
+        assert!(game.board().piece_at(Position::new(1, 2)).is_some());
+    }
+
+    #[test]
+    fn capture_piece() {
+        let mut game = Game::new_empty();
+        let p1 = Position::new(1, 6);
+        let p2 = Position::new(2, 7);
+        game.add_piece(Color::White, Type::Pawn, 1, 7);
+        game.add_piece(Color::White, Type::Pawn, p1.x(), p1.y());
+        game.add_piece(Color::Black, Type::Pawn, p2.x(), p2.y());
+
+        let piece1 = *game.board().piece_at(p1).unwrap();
+        let piece2 = *game.board().piece_at(p2).unwrap();
+
+
+        let moves = game.get_all_moves(Color::White);
+        assert_eq!(moves.len(), 1);
+        assert!(game.board().piece_at(p1).is_some());
+        assert!(game.board().piece_at(p2).is_some());
+        game.push_move(moves[0]);
+        assert!(game.board().piece_at(p1).is_none());
+        assert!(game.board().piece_at(p2).is_some());
+        game.pop_move();
+        assert!(game.board().piece_at(p1).is_some());
+        assert!(game.board().piece_at(p2).is_some());
+
+        assert_eq!(*game.board().piece_at(p1).unwrap(), piece1);
+        assert_eq!(*game.board().piece_at(p2).unwrap(), piece2);
+    }
+
+    #[test]
+    fn full_pawn_moves() {
         let mut game = Game::new_pawn_only();
-        let mut buffer = vec![Move::none(); 1_000];
+        let mut initial_buffer = vec![Move::none(); 1_000];
         let board = game.board.clone();
+        let count = game.board.insert_all_moves(Color::White, &mut initial_buffer[0..]);
+        assert_eq!(count, 16);
+
+        let mut color = Color::White;
+
         while true {
-            let (moves, buffer) = game.board.insert_all_moves(Color::White, &mut buffer[0..]);
-            if moves.is_empty() {
+            let count = game.board.insert_all_moves(color, &mut initial_buffer[0..]);
+            if count == 0 {
                 break;
             }
-            game.push_move(moves[0]);
+            game.push_move(initial_buffer[0]);
+            color = color.other();
         }
+
+        println!("FINAL POSITION\n{:#?}", game.board());
 
         while game.pop_move().is_some() {}
 

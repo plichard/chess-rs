@@ -64,7 +64,12 @@ impl Position {
     pub fn y(&self) -> i8 {
         ((self.index & 0b111000) >> 3) as i8
     }
+
+    pub fn xy(&self) -> (i8, i8) {
+        (self.x(), self.y())
+    }
 }
+
 
 #[derive(PartialEq, Eq, Copy, Clone)]
 pub struct Piece {

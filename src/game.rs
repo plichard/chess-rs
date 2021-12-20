@@ -24,6 +24,40 @@ impl Game {
         game
     }
 
+    pub fn new_classic_game() -> Game {
+        use Color::*;
+        use Type::*;
+        let mut game = Game::new_empty();
+        for x in 0..8 {
+            game.add_piece(White, Pawn, x, 1);
+            game.add_piece(Black, Pawn, x, 6);
+        }
+
+        game.add_piece(White, Rook, 0, 0);
+        game.add_piece(White, Rook, 7, 0);
+        game.add_piece(Black, Rook, 0, 7);
+        game.add_piece(Black, Rook, 7, 7);
+
+        game.add_piece(White, Knight, 1, 0);
+        game.add_piece(White, Knight, 6, 0);
+        game.add_piece(Black, Knight, 1, 7);
+        game.add_piece(Black, Knight, 6, 7);
+
+        game.add_piece(White, Bishop, 2, 0);
+        game.add_piece(White, Bishop, 5, 0);
+        game.add_piece(Black, Bishop, 2, 7);
+        game.add_piece(Black, Bishop, 5, 7);
+
+
+        game.add_piece(White, Queen, 3, 0);
+        game.add_piece(Black, Queen, 3, 7);
+
+        game.add_piece(White, King, 4, 0);
+        game.add_piece(Black, King, 4, 7);
+
+        game
+    }
+
     pub fn push_move(&mut self, m: Move) {
         self.move_stack.push(m);
         self.board.make_move(&m);
@@ -124,5 +158,13 @@ mod tests {
         while game.pop_move().is_some() {}
 
         assert_eq!(board, game.board);
+    }
+
+    #[test]
+    fn classic_game() {
+        let mut game = Game::new_classic_game();
+        let mut initial_buffer = vec![Move::none(); 1_000];
+        let count = game.board.insert_all_moves(Color::White, &mut initial_buffer[0..]);
+        assert_eq!(count, 20);
     }
 }

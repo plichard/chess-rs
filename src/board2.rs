@@ -191,7 +191,7 @@ impl Board {
         }
     }
 
-    pub fn insert_all_moves<'a>(&self, color: Color, buffer: &'a mut [Move]) -> usize {
+    pub fn insert_all_moves(&self, color: Color, buffer: &mut [Move]) -> usize {
         let mut count = 0;
         if color == Color::White {
             for (i, p) in self.pieces.white().iter().enumerate() {
@@ -212,14 +212,66 @@ impl Board {
         count
     }
 
-    pub fn insert_piece_moves<'a>(&self, pref: PieceRef, piece: &Piece, buffer: &'a mut [Move]) -> usize {
+    pub fn insert_piece_moves(&self, pref: PieceRef, piece: &Piece, buffer: &mut [Move]) -> usize {
         let mut count = 0;
         match piece.t() {
             Type::Pawn => count += self.insert_pawn_moves(pref, piece, &mut buffer[count..]),
             Type::Rook => count += self.insert_rook_moves(pref, piece, &mut buffer[count..]),
             Type::Bishop => count += self.insert_bishop_moves(pref, piece, &mut buffer[count..]),
             Type::Queen => count += self.insert_queen_moves(pref, piece, &mut buffer[count..]),
-            _ => {}
+            Type::King => count += self.insert_king_moves(pref, piece, &mut buffer[count..]),
+            Type::Knight => count += self.insert_knight_moves(pref, piece, &mut buffer[count..]),
+            _ => unreachable!()
+        }
+
+        count
+    }
+
+    pub fn insert_king_moves(&self, pref: PieceRef, king: &Piece, buffer: &mut [Move]) -> usize {
+        let mut count = 0;
+        let vdx = [0, -1, -1, -1, 0, 1, 1, 1];
+        let vdy = [1, 1, 0, -1, -1, -1, 0, 1];
+
+        let (x0, y0) = king.position.xy();
+
+        for (dx, dy) in std::iter::zip(vdx, vdy) {
+            if x0 + dx < 0 || x0 + dx > 7 || y0 +dy < 0 || y0 + dy > 7{
+                continue;
+            }
+            let p = Position::new(x0 + dx, y0 + dy);
+            let target_ref = self.board[p];
+            if target_ref.active() && target_ref.color() != king.color() {
+                buffer[count] = Move::new_capture(pref, target_ref);
+                count += 1;
+            } else if !target_ref.active() {
+                buffer[count] = Move::new_move(pref, king.position, p);
+                count += 1;
+            }
+        }
+
+        count
+    }
+
+    pub fn insert_knight_moves(&self, pref: PieceRef, knight: &Piece, buffer: &mut [Move]) -> usize {
+        let mut count = 0;
+        let vdx = [-1, -2, -2, -1, 1, 2, 2, 1];
+        let vdy = [2, 1, -1, -2, -2, -1, 1, 2];
+
+        let (x0, y0) = knight.position.xy();
+
+        for (dx, dy) in std::iter::zip(vdx, vdy) {
+            if x0 + dx < 0 || x0 + dx > 7 || y0 + dy < 0 || y0 + dy > 7{
+                continue;
+            }
+            let p = Position::new(x0 + dx, y0 + dy);
+            let target_ref = self.board[p];
+            if target_ref.active() && target_ref.color() != knight.color() {
+                buffer[count] = Move::new_capture(pref, target_ref);
+                count += 1;
+            } else if !target_ref.active() {
+                buffer[count] = Move::new_move(pref, knight.position, p);
+                count += 1;
+            }
         }
 
         count

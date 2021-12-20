@@ -1,11 +1,23 @@
 use std::fmt::{Debug, Display, Formatter};
-pub use super::piece2::*;
+pub use crate::piece2::*;
+
+use bitflags::bitflags;
+
+bitflags! {
+    struct MoveFlags : u8 {
+        const EMPTY = 0b0000;
+        const KING_MOVED = 0b0001;
+        const KING_ROOK_MOVED = 0b0010;
+        const QUEEN_ROOK_MOVED = 0b0100;
+    }
+}
 
 #[derive(Copy, Clone)]
 pub struct Move {
     action: Action,
     piece_ref: PieceRef,
     score: i32,
+    // flags: MoveFlags,
 }
 
 impl Move {

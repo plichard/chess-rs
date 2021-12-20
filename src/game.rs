@@ -107,7 +107,7 @@ mod tests {
     }
 
     #[test]
-    fn capture_piece() {
+    fn capture_and_promote_piece() {
         let mut game = Game::new_empty();
         let p1 = Position::new(1, 6);
         let p2 = Position::new(2, 7);
@@ -126,9 +126,11 @@ mod tests {
         game.push_move(moves[0]);
         assert!(game.board().piece_at(p1).is_none());
         assert!(game.board().piece_at(p2).is_some());
+        assert_eq!(game.board().piece_at(p2).unwrap().t(), Type::Queen);
         game.pop_move();
         assert!(game.board().piece_at(p1).is_some());
         assert!(game.board().piece_at(p2).is_some());
+        assert_eq!(game.board().piece_at(p1).unwrap().t(), Type::Pawn);
 
         assert_eq!(*game.board().piece_at(p1).unwrap(), piece1);
         assert_eq!(*game.board().piece_at(p2).unwrap(), piece2);

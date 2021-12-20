@@ -218,6 +218,7 @@ impl Board {
             Type::Pawn => count += self.insert_pawn_moves(pref, piece, &mut buffer[count..]),
             Type::Rook => count += self.insert_rook_moves(pref, piece, &mut buffer[count..]),
             Type::Bishop => count += self.insert_bishop_moves(pref, piece, &mut buffer[count..]),
+            Type::Queen => count += self.insert_queen_moves(pref, piece, &mut buffer[count..]),
             _ => {}
         }
 
@@ -396,7 +397,6 @@ impl Board {
 
     pub fn insert_bishop_moves(&self, pref: PieceRef, bishop: &Piece, buffer: &mut [Move]) -> usize {
         use std::cmp::min;
-        todo!();
         let mut count = 0;
         let (x0, y0) = (bishop.position.x(), bishop.position.y());
 
@@ -453,6 +453,13 @@ impl Board {
             }
         }
 
+
+        count
+    }
+
+    pub fn insert_queen_moves(&self, pref: PieceRef, queen: &Piece, buffer: &mut [Move]) -> usize {
+        let mut count = self.insert_rook_moves(pref, queen, buffer);
+        count += self.insert_bishop_moves(pref, queen, &mut buffer[count..]);
 
         count
     }

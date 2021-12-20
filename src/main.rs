@@ -49,6 +49,12 @@ fn run_sfml_gui() {
 
     window.set_vertical_sync_enabled(true);
 
+    let sound_move_source = sfml::audio::SoundBuffer::from_file("ui/sounds/move.wav").unwrap();
+
+    let mut sound_move = sfml::audio::Sound::new();
+    sound_move.set_buffer(&sound_move_source);
+
+
     let mut w_pawn_tex = Texture::from_file("ui/icons/w_pawn.png").unwrap();
     let mut b_pawn_tex = Texture::from_file("ui/icons/b_pawn.png").unwrap();
     let mut w_rook_tex = Texture::from_file("ui/icons/w_rook.png").unwrap();
@@ -148,6 +154,7 @@ fn run_sfml_gui() {
                                     if legal_moves.contains(&m) {
                                         last_move = Some(m);
                                         board.push_move(m);
+                                        sound_move.play();
                                         selected = None;
                                         legal_moves.clear();
                                     } else {
@@ -202,6 +209,7 @@ fn run_sfml_gui() {
             if let Ok(m) = rx_result.try_recv() {
                 if let Some(m) = m {
                     board.push_move(m);
+                    sound_move.play();
                     last_move = Some(m);
                     stop_sender = None;
                     // stop_sender = Some(compute_move(&board, tx_result.clone()));

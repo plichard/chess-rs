@@ -121,6 +121,26 @@ impl Piece {
         let mask = 0b111;
         self.data = (self.data & !mask) | (t as u8 & mask);
     }
+
+    pub fn char(&self) -> char {
+        use Color::*;
+        use Type::*;
+        match (self.color(), self.t()) {
+            (White, Pawn) => 'P',
+            (Black, Pawn) => 'p',
+            (White, Rook) => 'R',
+            (Black, Rook) => 'r',
+            (White, Queen) => 'Q',
+            (Black, Queen) => 'q',
+            (White, Bishop) => 'B',
+            (Black, Bishop) => 'b',
+            (White, Knight) => 'N',
+            (Black, Knight) => 'n',
+            (White, King) => 'K',
+            (Black, King) => 'k',
+            _ => '?'
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Copy, Clone)]

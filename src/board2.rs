@@ -216,13 +216,15 @@ impl Board {
         let mut count = 0;
         match piece.t() {
             Type::Pawn => count += self.insert_pawn_moves(pref, piece, &mut buffer[count..]),
+            Type::Rook => count += self.insert_rook_moves(pref, piece, &mut buffer[count..]),
+            Type::Bishop => count += self.insert_bishop_moves(pref, piece, &mut buffer[count..]),
             _ => {}
         }
 
         count
     }
 
-    pub fn insert_pawn_moves<'a>(&self, pref: PieceRef, pawn: &Piece, buffer: &'a mut [Move]) -> usize {
+    pub fn insert_pawn_moves(&self, pref: PieceRef, pawn: &Piece, buffer: &mut [Move]) -> usize {
         let mut count = 0;
         let p = pawn.position;
 
@@ -331,6 +333,129 @@ impl Board {
         count
     }
 
+
+    pub fn insert_rook_moves(&self, pref: PieceRef, rook: &Piece, buffer: &mut [Move]) -> usize {
+        let mut count = 0;
+        let (x0, y0) = (rook.position.x(), rook.position.y());
+
+        // left
+        for x in (0..x0).rev() {
+            let p = Position::new(x, y0);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != rook.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+        // right
+        for x in x0 + 1..8 {
+            let p = Position::new(x, y0);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != rook.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+        // up
+        for y in y0 + 1..8 {
+            let p = Position::new(x0, y);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != rook.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+        // down
+        for y in (0..y0).rev() {
+            let p = Position::new(x0, y);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != rook.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+
+        count
+    }
+
+    pub fn insert_bishop_moves(&self, pref: PieceRef, bishop: &Piece, buffer: &mut [Move]) -> usize {
+        use std::cmp::min;
+        todo!();
+        let mut count = 0;
+        let (x0, y0) = (bishop.position.x(), bishop.position.y());
+
+        // top right
+        for n in 1..min(7 - x0, 7 - y0) {
+            let p = Position::new(x0 + n, y0 + n);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != bishop.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+        // top left
+        for n in 1..min(x0, 7 - y0) {
+            let p = Position::new(x0 - n, y0 + n);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != bishop.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+        // bottom left
+        for n in 1..min(x0, y0) {
+            let p = Position::new(x0 - n, y0 - n);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != bishop.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+
+        // bottom right
+        for n in 1..min(7 - x0, y0) {
+            let p = Position::new(x0 + n, y0 - n);
+            let target_ref = self.board[p];
+            if target_ref.active() {
+                if target_ref.color() != bishop.color() {
+                    buffer[count] = Move::new_capture(pref, target_ref);
+                    count += 1;
+                }
+                break;
+            }
+        }
+
+
+        count
+    }
 
     pub fn make_move(&mut self, m: &Move) {
         match m.action {
@@ -450,12 +575,17 @@ impl Debug for Board {
         let line = "+---+---+---+---+---+---+---+---+";
         writeln!(f, "{}", line);
         for y in 0..8 {
-            println!("");
+            write!(f, "|");
             for x in 0..8 {
                 let p = Position::new(x, y);
-                let piece = self.board[p];
+                let maybe_piece = self.piece_at(p);
+                if let Some(piece) = maybe_piece {
+                    write!(f, " {} |", piece.char());
+                } else {
+                    write!(f, "   |");
+                }
             }
-            writeln!(f, "{}", line);
+            writeln!(f, "\n{}", line);
         }
         Ok(())
     }

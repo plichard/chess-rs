@@ -396,6 +396,7 @@ impl Board {
 
     pub fn find_best_move(&mut self, depth: i32, rx: Receiver<()>) -> Option<Move> {
         self.move_count = 0;
+        let t1 = std::time::Instant::now();
         let mut root_node: MoveNode = Move::evaluate(0).into();
         let m = self.search(
             depth,
@@ -409,7 +410,10 @@ impl Board {
             return None;
         }
 
-        println!("score = {}, move count = {}", m.score, self.move_count);
+        let t2 = std::time::Instant::now();
+        
+
+        println!("score = {}, move count = {}, time = {:?}", m.score, self.move_count, t2 - t1);
 
         return Some(m);
     }

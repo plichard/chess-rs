@@ -12,3 +12,4 @@ Chess engine written as an exercice in rust, with an interface in SFML
 - [ ] Checkmate (currently the king is captured)
 - [ ] En passant
 - [ ] Better heuristics
+- [ ] Capture and promote

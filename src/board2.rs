@@ -1,4 +1,5 @@
 use std::fmt::{Debug, Display, Formatter};
+use std::task::Poll::Pending;
 pub use crate::piece2::*;
 
 use bitflags::bitflags;
@@ -15,10 +16,27 @@ bitflags! {
 
 #[derive(Copy, Clone, Debug)]
 pub struct Move {
-    action: Action,
-    piece_ref: PieceRef,
-    score: i32,
+    pub action: Action,
+    pub piece_ref: PieceRef,
+    pub score: i32,
     flags: MoveFlags,
+    children_offset: usize,
+    children_count: usize,
+}
+
+impl std::ops::Neg for Move {
+    type Output = Move;
+
+    fn neg(self) -> Self::Output {
+        Self::Output {
+            score: -self.score,
+            action: self.action,
+            flags: self.flags,
+            children_count: self.children_count,
+            children_offset: self.children_offset,
+            piece_ref: self.piece_ref,
+        }
+    }
 }
 
 impl Move {
@@ -36,6 +54,8 @@ impl Move {
             piece_ref: PieceRef::null(),
             score: 0,
             flags: MoveFlags::EMPTY,
+            children_offset: 0,
+            children_count: 0,
         }
     }
 
@@ -45,6 +65,8 @@ impl Move {
             action: Action::Move { start, end },
             score: 0,
             flags,
+            children_offset: 0,
+            children_count: 0,
         }
     }
 
@@ -54,6 +76,8 @@ impl Move {
             action: Action::Capture { target: target_ref },
             score: 0,
             flags,
+            children_offset: 0,
+            children_count: 0,
         }
     }
 
@@ -63,6 +87,8 @@ impl Move {
             action: Action::Promote { t, end },
             score: 0,
             flags: MoveFlags::EMPTY,
+            children_offset: 0,
+            children_count: 0,
         }
     }
 
@@ -72,6 +98,8 @@ impl Move {
             action: Action::CaptureAndPromote { t, target },
             score: 0,
             flags: MoveFlags::EMPTY,
+            children_offset: 0,
+            children_count: 0,
         }
     }
 
@@ -81,6 +109,19 @@ impl Move {
             action: Action::Castle,
             score: 0,
             flags,
+            children_offset: 0,
+            children_count: 0,
+        }
+    }
+
+    pub fn new_evaluate(score: i32) -> Move {
+        Move {
+            piece_ref: PieceRef::null(),
+            action: Action::Evaluate,
+            score,
+            flags: MoveFlags::EMPTY,
+            children_offset: 0,
+            children_count: 0,
         }
     }
 }
@@ -88,6 +129,7 @@ impl Move {
 #[derive(Copy, Clone, Debug)]
 pub enum Action {
     None,
+    Evaluate,
     Move {
         start: Position,
         end: Position,
@@ -234,6 +276,36 @@ impl Board {
         }
     }
 
+    pub fn piece_from_ref(&self, pref: PieceRef) -> &Piece {
+        &self.pieces[pref]
+    }
+
+    // black or white: 2 values -> 1 bit
+    // nothing, pawn, rook, knight, bishop, queen, king: 7 values -> 3 bits
+    // 4 bits per cell, 64*4 = 256 bits total per board position
+    pub fn position_hash(&self) -> (u64, u64, u64, u64) {
+        todo!();
+        // let hash = |prefs: &[[PieceRef; 8]]| {
+        //     let mut value: u64 = 0;
+        //     for pref in prefs {
+        //         value <<= 4;
+        //         value *= 2 << 4;
+        //         if let Some(piece) = &cell.piece {
+        //             value += if piece.color == Color::White { 1 } else { 0 };
+        //             value += piece.t as u64;
+        //         }
+        //     }
+        //     value
+        // };
+        //
+        // let v1 = hash(&self.cells[0..2]);
+        // let v2 = hash(&self.cells[0..4]);
+        // let v3 = hash(&self.cells[0..6]);
+        // let v4 = hash(&self.cells[0..8]);
+        //
+        // (v1, v2, v3, v4)
+    }
+
     pub fn assert_consistency(&self) {
         let mut white_count = 0;
         for piece in self.pieces.white() {
@@ -256,6 +328,14 @@ impl Board {
                 assert_eq!(&self.board[self.pieces[*pref].position], pref);
             }
         }
+    }
+
+    pub fn black_pieces(&self) -> &[Piece] {
+        self.pieces.black()
+    }
+
+    pub fn white_pieces(&self) -> &[Piece] {
+        self.pieces.white()
     }
 
     pub fn add_new_piece(&mut self, color: Color, t: Type, x: i8, y: i8) {
@@ -734,7 +814,6 @@ impl Board {
             }
             Action::None => unreachable!(),
             Action::Castle => {
-                println!("CASTLING!!!!");
                 if m.piece_ref.color() == Color::White {
                     if m.flags.contains(MoveFlags::QUEEN_ROOK_MOVED) {
                         self.move_piece((0, 0), (3, 0));
@@ -761,6 +840,7 @@ impl Board {
                     self.black_move_flags |= m.flags;
                 }
             }
+            Action::Evaluate => unreachable!()
         }
     }
 
@@ -792,7 +872,7 @@ impl Board {
                 let flags = if m.piece_ref.color() == Color::White { &mut self.white_move_flags } else { &mut self.black_move_flags };
                 *flags ^= m.flags;
             }
-            Action::Promote { t, end } => {
+            Action::Promote { end, .. } => {
                 let start = if m.piece_ref.color() == Color::White {
                     end.dp(0, -1)
                 } else {
@@ -849,6 +929,7 @@ impl Board {
                     self.black_move_flags ^= m.flags;
                 }
             }
+            Action::Evaluate => unreachable!()
         }
     }
 }

@@ -4,13 +4,11 @@
 #![feature(destructuring_assignment)]
 
 use std::borrow::BorrowMut;
-use crate::board::{Action, Board, Move, MoveNode};
-use crate::piece::{Color, Piece, Type};
 use rand::Rng;
 use std::cmp::{max_by, Ordering};
 use std::error::Error;
 use std::io;
-use std::io::{stdin, stdout, Write};
+use std::io::{Read, stdin, stdout, Write};
 use std::mem::size_of;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
@@ -26,6 +24,9 @@ use sfml::window::mouse::Button;
 // use sixtyfps::Model;
 use crate::utils::{Position};
 
+use game::Game;
+use crate::board2::{Action, Color, Move, Type};
+
 mod board;
 mod piece;
 // mod slotvec;
@@ -39,9 +40,9 @@ fn run_sfml_gui() {
     use sfml::graphics::{Sprite, Texture, RenderTarget};
     use std::collections::HashMap;
 
-    let mut board = Board::new_classic_game();
+    let mut game = Game::new_classic_game();
 
-    let mut board_copy = board.clone();
+    let mut game_copy = game.clone();
 
     let (tx_result, rx_result) = sync_channel::<Option<Move>>(1);
 
@@ -117,12 +118,13 @@ fn run_sfml_gui() {
 
     let mut last_move: Option<Move> = None;
 
-    let compute_move = |board: &Board, tx: SyncSender<Option<Move>>| {
-        let mut board = board.clone();
+
+    let compute_move = |mut game: Game, tx: SyncSender<Option<Move>>| {
         let (tx_stop, rx_stop) = sync_channel(1);
 
         let thread = std::thread::spawn(move || {
-            if let Some(m) = board.find_best_move(6, rx_stop) {
+            let mut buffer = vec![Move::none(); 100000000];
+            if let Some(m) = game.find_best_move(6, &mut buffer[0..]) {
                 tx.send(Some(m));
             } else {
                 // println!("No valid move found");
@@ -134,7 +136,7 @@ fn run_sfml_gui() {
     };
 
     let mut do_compute = false;
-    let mut legal_moves = Vec::new();
+    // let mut legal_moves = Vec::new();
 
     while window.is_open() {
         while let Some(event) = window.poll_event() {
@@ -142,7 +144,7 @@ fn run_sfml_gui() {
             match event {
                 Event::Closed => window.close(),
                 Event::MouseButtonPressed { button, x, y } => {
-                    if button == Button::LEFT {
+                    /*if button == Button::LEFT {
                         let p = window.map_pixel_to_coords_current_view(Vector2i::new(x, y));
                         let x = p.x as i32 / 128;
                         let y = 7 - p.y as i32 / 128;
@@ -182,17 +184,17 @@ fn run_sfml_gui() {
                                 legal_moves.clear();
                             }
                         }
-                    }
+                    }*/
 
 
-                    if button == Button::RIGHT {
-                        selected = None;
-                        legal_moves.clear();
-                    }
+                    // if button == Button::RIGHT {
+                    //     selected = None;
+                    //     legal_moves.clear();
+                    // }
                 }
                 Event::KeyPressed { code, alt, ctrl, shift, system } => {
                     if code == Key::LEFT {
-                        board.pop_move();
+                        game.pop_move();
                     } else if code == Key::SPACE {
                         do_compute = true;
                     }
@@ -206,7 +208,7 @@ fn run_sfml_gui() {
         if let Some(sender) = &stop_sender {
             if let Ok(m) = rx_result.try_recv() {
                 if let Some(m) = m {
-                    board.push_move(m);
+                    game.push_move(m);
                     last_move = Some(m);
                     stop_sender = None;
                     // stop_sender = Some(compute_move(&board, tx_result.clone()));
@@ -215,7 +217,7 @@ fn run_sfml_gui() {
                 computing = true;
             }
         } else if do_compute {
-            stop_sender = Some(compute_move(&board, tx_result.clone()));
+            stop_sender = Some(compute_move(game.clone(), tx_result.clone()));
             do_compute = false;
         }
 
@@ -236,34 +238,34 @@ fn run_sfml_gui() {
             }
         }
 
-        if let Some(m) = last_move {
-            let pos = match m.action {
-                Action::Evaluation { .. } => None,
-                Action::Move { from, to } => {
-                    Some((from.position.x, from.position.y, to.position.x, to.position.y))
-                }
-                Action::Capture { piece, target } => {
-                    Some((piece.position.x, piece.position.y, target.position.x, target.position.y))
-                }
-                Action::Promote { old_piece, new_piece } => {
-                    Some((old_piece.position.x, old_piece.position.y, new_piece.position.x, new_piece.position.y))
-                }
-            };
-
-            if let Some((x1, y1, x2, y2)) = pos {
-                let px1 = x1 as f32 * 128.0;
-                let py1 = (7 - y1) as f32 * 128.0;
-
-                let px2 = x2 as f32 * 128.0;
-                let py2 = (7 - y2) as f32 * 128.0;
-
-                last_move_square.set_position((px1, py1));
-                window.draw(&last_move_square);
-
-                last_move_square.set_position((px2, py2));
-                window.draw(&last_move_square);
-            }
-        }
+        // if let Some(m) = last_move {
+        //     let pos = match m.action() {
+        //         Action::Evaluate { .. } => None,
+        //         Action::Move { from, to } => {
+        //             Some((from.position.x, from.position.y, to.position.x, to.position.y))
+        //         }
+        //         Action::Capture { piece, target } => {
+        //             Some((piece.position.x, piece.position.y, target.position.x, target.position.y))
+        //         }
+        //         Action::Promote { old_piece, new_piece } => {
+        //             Some((old_piece.position.x, old_piece.position.y, new_piece.position.x, new_piece.position.y))
+        //         }
+        //     };
+        //
+        //     if let Some((x1, y1, x2, y2)) = pos {
+        //         let px1 = x1 as f32 * 128.0;
+        //         let py1 = (7 - y1) as f32 * 128.0;
+        //
+        //         let px2 = x2 as f32 * 128.0;
+        //         let py2 = (7 - y2) as f32 * 128.0;
+        //
+        //         last_move_square.set_position((px1, py1));
+        //         window.draw(&last_move_square);
+        //
+        //         last_move_square.set_position((px2, py2));
+        //         window.draw(&last_move_square);
+        //     }
+        // }
 
         if let Some((x, y)) = selected {
             let px = 128.0 * x as f32;
@@ -272,15 +274,14 @@ fn run_sfml_gui() {
             window.draw(&select_square);
         }
 
-        let state = board.state();
         for y in 0..8 {
             for x in 0..8 {
                 let px = x as f32 * 128.0;
                 let py = (7 - y) as f32 * 128.0;
-                if let Some(piece) = &state[x][y].piece {
-                    use Color::*;
-                    use Type::*;
-                    let sprite = match (piece.color, piece.t) {
+                if let Some(piece) = &game.board().piece_at_xy(x, y) {
+                    use piece2::Color::*;
+                    use piece2::Type::*;
+                    let sprite = match (piece.color(), piece.t()) {
                         (White, Pawn) => &mut w_pawn,
                         (Black, Pawn) => &mut b_pawn,
                         (White, Rook) => &mut w_rook,
@@ -293,6 +294,7 @@ fn run_sfml_gui() {
                         (Black, Queen) => &mut b_queen,
                         (White, King) => &mut w_king,
                         (Black, King) => &mut b_king,
+                        _ => &mut w_pawn
                     };
 
                     sprite.set_position((px, py));
@@ -301,19 +303,19 @@ fn run_sfml_gui() {
             }
         }
 
-        for m in &legal_moves {
-            let (x, y) = match m.action {
-                Action::Evaluation { .. } => { unreachable!() }
-                Action::Move { to, .. } => (to.position.x, to.position.y),
-                Action::Capture { target, .. } => (target.position.x, target.position.y),
-                Action::Promote { new_piece, .. } => (new_piece.position.x, new_piece.position.y)
-            };
-            let px = x as f32 * 128.0;
-            let py = (7 - y) as f32 * 128.0;
-
-            legal_move_circle.set_position((px, py));
-            window.draw(&legal_move_circle);
-        }
+        // for m in &legal_moves {
+        //     let (x, y) = match m.action {
+        //         Action::Evaluation { .. } => { unreachable!() }
+        //         Action::Move { end, .. } => (end.x, end.y),
+        //         Action::Capture { target, .. } => (target.position.x, target.position.y),
+        //         Action::Promote { new_piece, .. } => (new_piece.position.x, new_piece.position.y)
+        //     };
+        //     let px = x as f32 * 128.0;
+        //     let py = (7 - y) as f32 * 128.0;
+        //
+        //     legal_move_circle.set_position((px, py));
+        //     window.draw(&legal_move_circle);
+        // }
 
 
         if computing {
@@ -332,9 +334,23 @@ fn main() {
     // use piece2::{Piece, Color, Type, Position};
     // use game::Game;
     //
-    // let mut game = Game::new_pawn_only();
-    // game.do_testing();
+    // let mut game = Game::new_classic_game();
+    //
+    // while (true) {
+    //     println!("{:?}", game.board());
+    //
+    //     let best_move = {
+    //         game.find_best_move(6).unwrap()
+    //     };
+    //
+    //     let mut buffer = [0; 10];
+    //     std::io::stdin().read(&mut buffer);
+    //
+    //     game.push_move(best_move);
+    // }
+    //
+    // println!("{:?}", game.board());
 
-    // run_sfml_gui();
+    run_sfml_gui();
     return;
 }

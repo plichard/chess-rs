@@ -15,6 +15,21 @@ pub enum Type {
     BadValue2 = 7,
 }
 
+impl Type {
+    pub fn value(&self) -> i32 {
+        match self {
+            Type::Pawn => 1000,
+            Type::Rook => 5000,
+            Type::Knight => 3000,
+            Type::Bishop => 3000,
+            Type::Queen => 9000,
+            Type::King => 100000,
+            Type::BadValue1 => 0,
+            Type::BadValue2 => 0,
+        }
+    }
+}
+
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub enum Color {
     White = 0,

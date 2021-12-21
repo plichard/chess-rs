@@ -32,6 +32,12 @@ pub struct Position {
     index: u8,
 }
 
+impl From<(i8, i8)> for Position {
+    fn from(xy: (i8, i8)) -> Self {
+        Position::new(xy.0, xy.1)
+    }
+}
+
 impl Position {
     pub fn zero() -> Self {
         Self {
@@ -148,7 +154,7 @@ impl Piece {
     }
 }
 
-#[derive(PartialEq, Eq, Copy, Clone)]
+#[derive(PartialEq, Eq, Copy, Clone, Debug)]
 pub struct PieceRef {
     index: u8,
 }

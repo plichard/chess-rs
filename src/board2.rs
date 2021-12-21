@@ -4,44 +4,56 @@ pub use crate::piece2::*;
 use bitflags::bitflags;
 
 bitflags! {
-    struct MoveFlags : u8 {
+    pub struct MoveFlags : u8 {
         const EMPTY = 0b0000;
         const KING_MOVED = 0b0001;
         const KING_ROOK_MOVED = 0b0010;
         const QUEEN_ROOK_MOVED = 0b0100;
+        const FULL = 0b0111;
     }
 }
 
-#[derive(Copy, Clone)]
+#[derive(Copy, Clone, Debug)]
 pub struct Move {
     action: Action,
     piece_ref: PieceRef,
     score: i32,
-    // flags: MoveFlags,
+    flags: MoveFlags,
 }
 
 impl Move {
+    pub fn action(&self) -> &Action {
+        &self.action
+    }
+
+    pub fn flags(&self) -> &MoveFlags {
+        &self.flags
+    }
+
     pub fn none() -> Move {
         Self {
             action: Action::None,
             piece_ref: PieceRef::null(),
             score: 0,
+            flags: MoveFlags::EMPTY,
         }
     }
 
-    pub fn new_move(piece_ref: PieceRef, start: Position, end: Position) -> Move {
+    pub fn new_move(piece_ref: PieceRef, start: Position, end: Position, flags: MoveFlags) -> Move {
         Move {
             piece_ref,
             action: Action::Move { start, end },
             score: 0,
+            flags,
         }
     }
 
-    pub fn new_capture(piece_ref: PieceRef, target_ref: PieceRef) -> Move {
+    pub fn new_capture(piece_ref: PieceRef, target_ref: PieceRef, flags: MoveFlags) -> Move {
         Move {
             piece_ref,
             action: Action::Capture { target: target_ref },
             score: 0,
+            flags,
         }
     }
 
@@ -50,6 +62,7 @@ impl Move {
             piece_ref,
             action: Action::Promote { t, end },
             score: 0,
+            flags: MoveFlags::EMPTY,
         }
     }
 
@@ -58,12 +71,22 @@ impl Move {
             piece_ref,
             action: Action::CaptureAndPromote { t, target },
             score: 0,
+            flags: MoveFlags::EMPTY,
+        }
+    }
+
+    pub fn new_castle(king_ref: PieceRef, flags: MoveFlags) -> Move {
+        Move {
+            piece_ref: king_ref,
+            action: Action::Castle,
+            score: 0,
+            flags,
         }
     }
 }
 
-#[derive(Copy, Clone)]
-enum Action {
+#[derive(Copy, Clone, Debug)]
+pub enum Action {
     None,
     Move {
         start: Position,
@@ -84,7 +107,7 @@ enum Action {
         t: Type,
     },
 
-    Castle, // action piece is the tower used for this
+    Castle, // ony flags are needed for the piece selection
 }
 
 mod utils {
@@ -157,6 +180,10 @@ mod utils {
                 piece_refs: [PieceRef::null(); 64]
             }
         }
+
+        pub fn piece_refs(&self) -> &[PieceRef; 64] {
+            &self.piece_refs
+        }
     }
 
     impl Index<Position> for PieceBoard {
@@ -172,12 +199,29 @@ mod utils {
             &mut self.piece_refs[position.index()]
         }
     }
+
+
+    impl Index<(i8, i8)> for PieceBoard {
+        type Output = PieceRef;
+
+        fn index(&self, xy: (i8, i8)) -> &Self::Output {
+            &self.piece_refs[Position::from(xy).index()]
+        }
+    }
+
+    impl IndexMut<(i8, i8)> for PieceBoard {
+        fn index_mut(&mut self, xy: (i8, i8)) -> &mut Self::Output {
+            &mut self.piece_refs[Position::from(xy).index()]
+        }
+    }
 }
 
 #[derive(PartialEq, Eq, Clone)]
 pub struct Board {
     board: utils::PieceBoard,
     pieces: utils::PieceList,
+    white_move_flags: MoveFlags,
+    black_move_flags: MoveFlags,
 }
 
 impl Board {
@@ -185,6 +229,32 @@ impl Board {
         Self {
             board: utils::PieceBoard::new(),
             pieces: utils::PieceList::new(),
+            white_move_flags: MoveFlags::EMPTY,
+            black_move_flags: MoveFlags::EMPTY,
+        }
+    }
+
+    pub fn assert_consistency(&self) {
+        let mut white_count = 0;
+        for piece in self.pieces.white() {
+            if piece.active() {
+                white_count += 1;
+                assert_eq!(&self.pieces[self.board[piece.position]], piece);
+            }
+        }
+
+        let mut black_count = 0;
+        for piece in self.pieces.black() {
+            if piece.active() {
+                black_count += 1;
+                assert_eq!(&self.pieces[self.board[piece.position]], piece);
+            }
+        }
+
+        for pref in self.board.piece_refs() {
+            if pref.active() {
+                assert_eq!(&self.board[self.pieces[*pref].position], pref);
+            }
         }
     }
 
@@ -201,6 +271,19 @@ impl Board {
         } else {
             None
         }
+    }
+
+    pub fn piece_at_xy(&self, x: i8, y: i8) -> Option<&Piece> {
+        self.piece_at(Position::new(x, y))
+    }
+
+    fn move_piece(&mut self, p1: (i8, i8), p2: (i8, i8)) {
+        debug_assert!(!self.board[p2].active());
+        let pref = self.board[p1];
+        self.board[p2] = pref;
+        self.board[p1] = PieceRef::null();
+
+        self.pieces[pref].position = p2.into();
     }
 
     pub fn insert_all_moves(&self, color: Color, buffer: &mut [Move]) -> usize {
@@ -226,12 +309,13 @@ impl Board {
 
     pub fn insert_piece_moves(&self, pref: PieceRef, piece: &Piece, buffer: &mut [Move]) -> usize {
         let mut count = 0;
+        let flags = if piece.color() == Color::White { &self.white_move_flags } else { &self.black_move_flags };
         match piece.t() {
             Type::Pawn => count += self.insert_pawn_moves(pref, piece, &mut buffer[count..]),
-            Type::Rook => count += self.insert_rook_moves(pref, piece, &mut buffer[count..]),
+            Type::Rook => count += self.insert_rook_moves(pref, piece, flags, &mut buffer[count..]),
             Type::Bishop => count += self.insert_bishop_moves(pref, piece, &mut buffer[count..]),
             Type::Queen => count += self.insert_queen_moves(pref, piece, &mut buffer[count..]),
-            Type::King => count += self.insert_king_moves(pref, piece, &mut buffer[count..]),
+            Type::King => count += self.insert_king_moves(pref, piece, flags, &mut buffer[count..]),
             Type::Knight => count += self.insert_knight_moves(pref, piece, &mut buffer[count..]),
             _ => unreachable!()
         }
@@ -239,27 +323,57 @@ impl Board {
         count
     }
 
-    pub fn insert_king_moves(&self, pref: PieceRef, king: &Piece, buffer: &mut [Move]) -> usize {
+    pub fn insert_king_moves(&self, pref: PieceRef, king: &Piece, board_flags: &MoveFlags, buffer: &mut [Move]) -> usize {
         let mut count = 0;
         let vdx = [0, -1, -1, -1, 0, 1, 1, 1];
         let vdy = [1, 1, 0, -1, -1, -1, 0, 1];
 
         let (x0, y0) = king.position.xy();
 
+        let mut flags = MoveFlags::EMPTY;
+
+        if !board_flags.contains(MoveFlags::KING_MOVED) {
+            flags.set(MoveFlags::KING_MOVED, true);
+        }
+
         for (dx, dy) in std::iter::zip(vdx, vdy) {
-            if x0 + dx < 0 || x0 + dx > 7 || y0 +dy < 0 || y0 + dy > 7{
+            if x0 + dx < 0 || x0 + dx > 7 || y0 + dy < 0 || y0 + dy > 7 {
                 continue;
             }
             let p = Position::new(x0 + dx, y0 + dy);
             let target_ref = self.board[p];
             if target_ref.active() && target_ref.color() != king.color() {
-                buffer[count] = Move::new_capture(pref, target_ref);
+                buffer[count] = Move::new_capture(pref, target_ref, flags);
                 count += 1;
             } else if !target_ref.active() {
-                buffer[count] = Move::new_move(pref, king.position, p);
+                buffer[count] = Move::new_move(pref, king.position, p, flags);
                 count += 1;
             }
         }
+
+        if !board_flags.contains(MoveFlags::KING_MOVED) {
+            if !board_flags.contains(MoveFlags::QUEEN_ROOK_MOVED) &&
+                !self.board[(1, y0)].active() &&
+                !self.board[(2, y0)].active() &&
+                !self.board[(3, y0)].active() {
+                let mut flags = flags;
+                flags.set(MoveFlags::QUEEN_ROOK_MOVED, true);
+                flags.set(MoveFlags::KING_MOVED, true);
+                buffer[count] = Move::new_castle(pref, flags);
+                count += 1;
+            }
+
+            if !board_flags.contains(MoveFlags::KING_ROOK_MOVED) &&
+                !self.board[(5, y0)].active() &&
+                !self.board[(6, y0)].active() {
+                let mut flags = flags;
+                flags.set(MoveFlags::KING_ROOK_MOVED, true);
+                flags.set(MoveFlags::KING_MOVED, true);
+                buffer[count] = Move::new_castle(pref, flags);
+                count += 1;
+            }
+        }
+
 
         count
     }
@@ -272,16 +386,16 @@ impl Board {
         let (x0, y0) = knight.position.xy();
 
         for (dx, dy) in std::iter::zip(vdx, vdy) {
-            if x0 + dx < 0 || x0 + dx > 7 || y0 + dy < 0 || y0 + dy > 7{
+            if x0 + dx < 0 || x0 + dx > 7 || y0 + dy < 0 || y0 + dy > 7 {
                 continue;
             }
             let p = Position::new(x0 + dx, y0 + dy);
             let target_ref = self.board[p];
             if target_ref.active() && target_ref.color() != knight.color() {
-                buffer[count] = Move::new_capture(pref, target_ref);
+                buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                 count += 1;
             } else if !target_ref.active() {
-                buffer[count] = Move::new_move(pref, knight.position, p);
+                buffer[count] = Move::new_move(pref, knight.position, p, MoveFlags::EMPTY);
                 count += 1;
             }
         }
@@ -296,11 +410,11 @@ impl Board {
         if pawn.color() == Color::White {
             if p.y() < 6 {
                 if !self.board[p.dp(0, 1)].active() {
-                    buffer[count] = Move::new_move(pref, p, p.dp(0, 1));
+                    buffer[count] = Move::new_move(pref, p, p.dp(0, 1), MoveFlags::EMPTY);
                     count += 1;
 
                     if p.y() == 1 && !self.board[p.dp(0, 2)].active() {
-                        buffer[count] = Move::new_move(pref, p, p.dp(0, 2));
+                        buffer[count] = Move::new_move(pref, p, p.dp(0, 2), MoveFlags::EMPTY);
                         count += 1;
                     }
                 }
@@ -308,7 +422,7 @@ impl Board {
                 if p.x() > 0 {
                     let target_ref = self.board[p.dp(-1, 1)];
                     if target_ref.active() && target_ref.color() == Color::Black {
-                        buffer[count] = Move::new_capture(pref, target_ref);
+                        buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                         count += 1;
                     }
                 }
@@ -316,7 +430,7 @@ impl Board {
                 if p.x() < 7 {
                     let target_ref = self.board[p.dp(1, 1)];
                     if target_ref.active() && target_ref.color() == Color::Black {
-                        buffer[count] = Move::new_capture(pref, target_ref);
+                        buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                         count += 1;
                     }
                 }
@@ -346,11 +460,11 @@ impl Board {
         } else {
             if p.y() > 1 {
                 if !self.board[p.dp(0, -1)].active() {
-                    buffer[count] = Move::new_move(pref, p, p.dp(0, -1));
+                    buffer[count] = Move::new_move(pref, p, p.dp(0, -1), MoveFlags::EMPTY);
                     count += 1;
 
                     if p.y() == 6 && !self.board[p.dp(0, -2)].active() {
-                        buffer[count] = Move::new_move(pref, p, p.dp(0, -2));
+                        buffer[count] = Move::new_move(pref, p, p.dp(0, -2), MoveFlags::EMPTY);
                         count += 1;
                     }
                 }
@@ -358,7 +472,7 @@ impl Board {
                 if p.x() > 0 {
                     let target_ref = self.board[p.dp(-1, -1)];
                     if target_ref.active() && target_ref.color() == Color::White {
-                        buffer[count] = Move::new_capture(pref, target_ref);
+                        buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                         count += 1;
                     }
                 }
@@ -366,7 +480,7 @@ impl Board {
                 if p.x() < 7 {
                     let target_ref = self.board[p.dp(1, -1)];
                     if target_ref.active() && target_ref.color() == Color::White {
-                        buffer[count] = Move::new_capture(pref, target_ref);
+                        buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                         count += 1;
                     }
                 }
@@ -399,9 +513,18 @@ impl Board {
     }
 
 
-    pub fn insert_rook_moves(&self, pref: PieceRef, rook: &Piece, buffer: &mut [Move]) -> usize {
+    pub fn insert_rook_moves(&self, pref: PieceRef, rook: &Piece, board_flags: &MoveFlags, buffer: &mut [Move]) -> usize {
         let mut count = 0;
         let (x0, y0) = (rook.position.x(), rook.position.y());
+
+        let mut flags = MoveFlags::EMPTY;
+
+        // these positions are the same for white AND black
+        if !board_flags.contains(MoveFlags::QUEEN_ROOK_MOVED) && x0 == 0 {
+            flags.set(MoveFlags::QUEEN_ROOK_MOVED, true);
+        } else if !board_flags.contains(MoveFlags::KING_ROOK_MOVED) && x0 == 7 {
+            flags.set(MoveFlags::KING_ROOK_MOVED, true);
+        }
 
         // left
         for x in (0..x0).rev() {
@@ -409,10 +532,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != rook.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, flags);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, rook.position, p, flags);
+                count += 1;
             }
         }
 
@@ -422,10 +548,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != rook.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, flags);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, rook.position, p, flags);
+                count += 1;
             }
         }
 
@@ -435,10 +564,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != rook.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, flags);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, rook.position, p, flags);
+                count += 1;
             }
         }
 
@@ -448,10 +580,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != rook.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, flags);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, rook.position, p, flags);
+                count += 1;
             }
         }
 
@@ -470,10 +605,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != bishop.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, bishop.position, p, MoveFlags::EMPTY);
+                count += 1;
             }
         }
 
@@ -483,10 +621,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != bishop.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, bishop.position, p, MoveFlags::EMPTY);
+                count += 1;
             }
         }
 
@@ -496,10 +637,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != bishop.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, bishop.position, p, MoveFlags::EMPTY);
+                count += 1;
             }
         }
 
@@ -510,10 +654,13 @@ impl Board {
             let target_ref = self.board[p];
             if target_ref.active() {
                 if target_ref.color() != bishop.color() {
-                    buffer[count] = Move::new_capture(pref, target_ref);
+                    buffer[count] = Move::new_capture(pref, target_ref, MoveFlags::EMPTY);
                     count += 1;
                 }
                 break;
+            } else {
+                buffer[count] = Move::new_move(pref, bishop.position, p, MoveFlags::EMPTY);
+                count += 1;
             }
         }
 
@@ -522,7 +669,8 @@ impl Board {
     }
 
     pub fn insert_queen_moves(&self, pref: PieceRef, queen: &Piece, buffer: &mut [Move]) -> usize {
-        let mut count = self.insert_rook_moves(pref, queen, buffer);
+        // TODO: Clean this up, we pretend everything moved already for the queen, with MoveFlags::FULL
+        let mut count = self.insert_rook_moves(pref, queen, &MoveFlags::FULL, buffer);
         count += self.insert_bishop_moves(pref, queen, &mut buffer[count..]);
 
         count
@@ -536,6 +684,8 @@ impl Board {
                 self.board[end] = m.piece_ref;
                 self.board[start] = PieceRef::null();
                 self.pieces[m.piece_ref].position = end;
+                let flags = if m.piece_ref.color() == Color::White { &mut self.white_move_flags } else { &mut self.black_move_flags };
+                *flags |= m.flags;
             }
             Action::Capture { target } => {
                 // copy positions
@@ -550,6 +700,9 @@ impl Board {
                 // update board
                 self.board[end] = m.piece_ref;
                 self.board[start] = PieceRef::null();
+
+                let flags = if m.piece_ref.color() == Color::White { &mut self.white_move_flags } else { &mut self.black_move_flags };
+                *flags |= m.flags;
             }
             Action::Promote { t, end } => {
                 let start = self.pieces[m.piece_ref].position;
@@ -558,6 +711,7 @@ impl Board {
                 self.board[end] = m.piece_ref;
                 self.board[start] = PieceRef::null();
 
+                self.pieces[m.piece_ref].position = end;
                 // change the type
                 self.pieces[m.piece_ref].set_type(t);
             }
@@ -579,7 +733,34 @@ impl Board {
                 self.pieces[m.piece_ref].set_type(t);
             }
             Action::None => unreachable!(),
-            Action::Castle => unreachable!()
+            Action::Castle => {
+                println!("CASTLING!!!!");
+                if m.piece_ref.color() == Color::White {
+                    if m.flags.contains(MoveFlags::QUEEN_ROOK_MOVED) {
+                        self.move_piece((0, 0), (3, 0));
+                        self.move_piece((4, 0), (2, 0));
+                    } else if m.flags.contains(MoveFlags::KING_ROOK_MOVED) {
+                        self.move_piece((7, 0), (5, 0));
+                        self.move_piece((4, 0), (6, 0));
+                    } else {
+                        // it makes no sense to castle without a single rook moving
+                        unreachable!();
+                    }
+                    self.white_move_flags |= m.flags;
+                } else {
+                    if m.flags.contains(MoveFlags::QUEEN_ROOK_MOVED) {
+                        self.move_piece((0, 7), (3, 7));
+                        self.move_piece((4, 7), (2, 7));
+                    } else if m.flags.contains(MoveFlags::KING_ROOK_MOVED) {
+                        self.move_piece((7, 7), (5, 7));
+                        self.move_piece((4, 7), (6, 7));
+                    } else {
+                        // it makes no sense to castle without a single rook moving
+                        unreachable!();
+                    }
+                    self.black_move_flags |= m.flags;
+                }
+            }
         }
     }
 
@@ -591,6 +772,9 @@ impl Board {
                 self.board[start] = m.piece_ref;
                 self.board[end] = PieceRef::null();
                 self.pieces[m.piece_ref].position = start;
+
+                let flags = if m.piece_ref.color() == Color::White { &mut self.white_move_flags } else { &mut self.black_move_flags };
+                *flags ^= m.flags;
             }
             Action::Capture { target } => {
                 let end = self.pieces[m.piece_ref].position;
@@ -604,6 +788,9 @@ impl Board {
                 // update board
                 self.board[start] = m.piece_ref;
                 self.board[end] = target;
+
+                let flags = if m.piece_ref.color() == Color::White { &mut self.white_move_flags } else { &mut self.black_move_flags };
+                *flags ^= m.flags;
             }
             Action::Promote { t, end } => {
                 let start = if m.piece_ref.color() == Color::White {
@@ -615,6 +802,7 @@ impl Board {
                 self.board[start] = m.piece_ref;
                 self.board[end] = PieceRef::null();
 
+                self.pieces[m.piece_ref].position = start;
                 self.pieces[m.piece_ref].set_type(Type::Pawn);
             }
             Action::CaptureAndPromote { target, .. } => {
@@ -634,7 +822,33 @@ impl Board {
                 self.pieces[m.piece_ref].set_type(Type::Pawn);
             }
             Action::None => unreachable!(),
-            Action::Castle => unreachable!()
+            Action::Castle => {
+                if m.piece_ref.color() == Color::White {
+                    if m.flags.contains(MoveFlags::QUEEN_ROOK_MOVED) {
+                        self.move_piece((3, 0), (0, 0));
+                        self.move_piece((2, 0), (4, 0));
+                    } else if m.flags.contains(MoveFlags::KING_ROOK_MOVED) {
+                        self.move_piece((5, 0), (7, 0));
+                        self.move_piece((6, 0), (4, 0));
+                    } else {
+                        // it makes no sense to castle without a single rook moving
+                        unreachable!();
+                    }
+                    self.white_move_flags ^= m.flags;
+                } else {
+                    if m.flags.contains(MoveFlags::QUEEN_ROOK_MOVED) {
+                        self.move_piece((3, 7), (0, 7));
+                        self.move_piece((2, 7), (4, 7));
+                    } else if m.flags.contains(MoveFlags::KING_ROOK_MOVED) {
+                        self.move_piece((5, 7), (7, 7));
+                        self.move_piece((6, 7), (4, 7));
+                    } else {
+                        // it makes no sense to castle without a single rook moving
+                        unreachable!();
+                    }
+                    self.black_move_flags ^= m.flags;
+                }
+            }
         }
     }
 }
@@ -643,12 +857,12 @@ impl Board {
 
 impl Debug for Board {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        let line = "+---+---+---+---+---+---+---+---+";
+        let line = "  +---+---+---+---+---+---+---+---+";
         writeln!(f, "{}", line);
         for y in 0..8 {
-            write!(f, "|");
+            write!(f, "{} |", 8 - y);
             for x in 0..8 {
-                let p = Position::new(x, y);
+                let p = Position::new(x, 7 - y);
                 let maybe_piece = self.piece_at(p);
                 if let Some(piece) = maybe_piece {
                     write!(f, " {} |", piece.char());
@@ -658,6 +872,7 @@ impl Debug for Board {
             }
             writeln!(f, "\n{}", line);
         }
+        writeln!(f, "    a   b   c   d   e   f   g   h");
         Ok(())
     }
 }
@@ -711,5 +926,57 @@ mod tests {
         assert_eq!(piece.color(), Color::Black);
         assert_eq!(piece.t(), Type::Rook);
         assert_eq!(piece.position, p);
+    }
+
+    #[test]
+    fn white_castle() {
+        let mut board = Board::new();
+        let mut initial_buffer = vec![Move::none(); 1_000];
+        board.add_new_piece(Color::White, Type::King, 4, 0);
+        board.add_new_piece(Color::White, Type::Rook, 0, 0);
+        board.add_new_piece(Color::White, Type::Rook, 7, 0);
+
+        let count = board.insert_all_moves(Color::White, &mut initial_buffer[0..]);
+        assert_eq!(count, 5 + 3 + 2 + 7 + 7 + 2);
+
+        let moves: Vec<Move> = initial_buffer[0..count].iter().filter_map(|m| match m.action() {
+            Action::Castle => Some(*m),
+            _ => None
+        }).collect();
+
+        assert_eq!(moves.len(), 2);
+
+        let m1 = moves.iter().find(|m| m.flags().contains(MoveFlags::QUEEN_ROOK_MOVED)).unwrap();
+        let m2 = moves.iter().find(|m| m.flags().contains(MoveFlags::KING_ROOK_MOVED)).unwrap();
+
+
+        board.make_move(m1);
+        assert_eq!(board.piece_at_xy(0, 0), None);
+        assert_eq!(board.piece_at_xy(4, 0), None);
+        assert!(board.piece_at_xy(2, 0).is_some());
+        assert!(board.piece_at_xy(3, 0).is_some());
+        assert_eq!(board.white_move_flags, MoveFlags::KING_MOVED | MoveFlags::QUEEN_ROOK_MOVED);
+
+
+        board.revert_move(m1);
+        assert!(board.piece_at_xy(0, 0).is_some());
+        assert!(board.piece_at_xy(4, 0).is_some());
+        assert!(board.piece_at_xy(2, 0).is_none());
+        assert!(board.piece_at_xy(3, 0).is_none());
+        assert_eq!(board.white_move_flags, MoveFlags::EMPTY);
+
+        board.make_move(m2);
+        assert_eq!(board.piece_at_xy(7, 0), None);
+        assert_eq!(board.piece_at_xy(4, 0), None);
+        assert!(board.piece_at_xy(6, 0).is_some());
+        assert!(board.piece_at_xy(5, 0).is_some());
+        assert_eq!(board.white_move_flags, MoveFlags::KING_MOVED | MoveFlags::KING_ROOK_MOVED);
+
+        board.revert_move(m2);
+        assert!(board.piece_at_xy(7, 0).is_some());
+        assert!(board.piece_at_xy(4, 0).is_some());
+        assert!(board.piece_at_xy(6, 0).is_none());
+        assert!(board.piece_at_xy(5, 0).is_none());
+        assert_eq!(board.white_move_flags, MoveFlags::EMPTY);
     }
 }

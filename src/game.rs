@@ -146,27 +146,97 @@ mod tests {
 
         let mut color = Color::White;
 
-        while true {
+        use rand::seq::SliceRandom;
+
+        let rng = &mut rand::thread_rng();
+
+        // play for 100 moves max
+        for _ in 0..100 {
             let count = game.board.insert_all_moves(color, &mut initial_buffer[0..]);
             if count == 0 {
                 break;
             }
-            game.push_move(initial_buffer[0]);
+            let m = initial_buffer[0..count].choose(rng).unwrap();
+            println!("{}", m);
+            game.push_move(*m);
+            game.board.assert_consistency();
+            println!("{:?}", game.board);
             color = color.other();
         }
 
         println!("FINAL POSITION\n{:#?}", game.board());
 
-        while game.pop_move().is_some() {}
+        while game.pop_move().is_some() {
+            game.board.assert_consistency();
+        }
 
         assert_eq!(board, game.board);
     }
 
     #[test]
-    fn classic_game() {
+    fn classic_game_start() {
         let mut game = Game::new_classic_game();
         let mut initial_buffer = vec![Move::none(); 1_000];
         let count = game.board.insert_all_moves(Color::White, &mut initial_buffer[0..]);
         assert_eq!(count, 20);
+    }
+
+
+    #[test]
+    fn classic_game_full() {
+        for _ in 0..20 {
+            let mut game = Game::new_classic_game();
+            let mut initial_buffer = vec![Move::none(); 1_000];
+            let board = game.board.clone();
+            let count = game.board.insert_all_moves(Color::White, &mut initial_buffer[0..]);
+            assert_eq!(count, 20);
+
+            let mut color = Color::White;
+
+            use rand::seq::SliceRandom;
+
+            let rng = &mut rand::thread_rng();
+
+            // play for 1000 moves max
+
+            for _ in 0..1000 {
+                let count = game.board.insert_all_moves(color, &mut initial_buffer[0..]);
+                if count == 0 {
+                    break;
+                }
+
+                let moves = &initial_buffer[0..count];
+                // let moves: Vec<&Move> = moves.iter().filter(|m| match m.action() {
+                //     Action::Castle => false,
+                //     _ => true
+                // }).collect();
+                // if moves.len() == 0 {
+                //     break;
+                // }
+                // let m = moves[0];
+                let m = if let Some(m) = moves.iter().find(|m| match m.action() {
+                    Action::Castle => true,
+                    _ => false
+                }) {
+                    m
+                } else {
+                    moves.choose(rng).unwrap()
+                };
+
+                println!("{}", m);
+                game.push_move(*m);
+                game.board.assert_consistency();
+                println!("{:?}", game.board);
+                color = color.other();
+            }
+
+            println!("FINAL POSITION\n{:#?}", game.board());
+
+            while game.pop_move().is_some() {
+                game.board.assert_consistency();
+            }
+
+            assert_eq!(board, game.board);
+        }
     }
 }

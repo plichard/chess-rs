@@ -142,7 +142,7 @@ impl Game {
             }
             Action::Evaluate => m.score,
             Action::Promote { t, .. } => t.value(),
-            Action::Castle => 10,
+            Action::Castle => 1000,
             Action::None => 0,
         }
     }
@@ -164,7 +164,7 @@ impl Game {
     pub fn find_best_move(&mut self, depth: i32, buffer: &mut [Move]) -> Option<Move> {
         self.move_count = 0;
         let mut root_node = Move::new_evaluate(0);
-        let (m, _) = self.search(
+        let (m, count) = self.search(
             depth,
             Move::new_evaluate(-i32::MAX),
             Move::new_evaluate(i32::MAX),
@@ -175,7 +175,7 @@ impl Game {
         //     return None;
         // }
 
-        println!("score = {}, move count = {}", m.score, self.move_count);
+        println!("score = {}, move count = {}/{}", m.score, self.move_count, count);
 
         return Some(m);
     }
@@ -192,11 +192,11 @@ impl Game {
         //     return Move::evaluate(self.evaluate_position());
         // }
 
-        // if let Action::Capture { target, .. } = &parent.m.action {
-        //     if target.t == Type::King {
-        //         return Move::evaluate(self.evaluate_position());
-        //     }
-        // }
+        if let Action::Capture { target, .. } = &parent.action {
+            if self.board.piece_from_ref(*target).t() == Type::King {
+                return (Move::new_evaluate(self.evaluate_position()), 0);
+            }
+        }
 
         if depth == 0 {
             return (Move::new_evaluate(self.evaluate_position()), 0);

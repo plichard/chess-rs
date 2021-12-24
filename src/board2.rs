@@ -276,6 +276,11 @@ impl Board {
         }
     }
 
+    pub fn set_flags(&mut self, flags: MoveFlags) {
+        self.white_move_flags = flags;
+        self.black_move_flags = flags;
+    }
+
     pub fn piece_from_ref(&self, pref: PieceRef) -> &Piece {
         &self.pieces[pref]
     }

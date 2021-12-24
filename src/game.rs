@@ -18,6 +18,10 @@ impl Game {
         }
     }
 
+    pub fn set_flags(&mut self, flags: MoveFlags) {
+        self.board.set_flags(flags);
+    }
+
     pub fn new_pawn_only() -> Game {
         let mut game = Game::new_empty();
         for x in 0..8 {
@@ -407,5 +411,38 @@ mod tests {
 
             assert_eq!(board, game.board);
         }
+    }
+
+    #[test]
+    fn opt_1() {
+        let mut game = Game::new_empty();
+        let mut initial_buffer = vec![Move::none(); 1_000];
+        game.add_piece(Color::White, Type::Bishop, 0, 0);
+        game.add_piece(Color::Black, Type::King, 5, 5);
+
+        let m = game.find_best_move(1, &mut initial_buffer[0..]).unwrap();
+        assert!(matches!(m.action(), Action::Capture{..}));
+    }
+
+    #[test]
+    fn opt_2() {
+        let mut game = Game::new_empty();
+        game.set_flags(MoveFlags::FULL);
+        let mut initial_buffer = vec![Move::none(); 10_000];
+        game.add_piece(Color::White, Type::Rook, 1, 6);
+        game.add_piece(Color::White, Type::Rook, 0, 2);
+        game.add_piece(Color::Black, Type::King, 7, 7);
+
+        println!("{:?}", game.board());
+
+        let m = game.find_best_move(4, &mut initial_buffer[0..]).unwrap();
+        assert!(matches!(m.action(), Action::Move{..}));
+        if let Action::Move{start, end} = m.action() {
+            assert_eq!(start, &Position::new(0, 2));
+            assert_eq!(end, &Position::new(0, 7));
+        }
+        game.push_move(m);
+        
+        
     }
 }

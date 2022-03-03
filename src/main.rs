@@ -28,6 +28,8 @@ mod board;
 mod piece;
 // mod slotvec;
 mod utils;
+use board::{Command, Response};
+
 
 fn run_sfml_gui() {
     use sfml::window::{Style, VideoMode};
@@ -114,28 +116,46 @@ fn run_sfml_gui() {
     let font = sfml::graphics::Font::from_file("ui/fonts/Inconsolata-Regular.ttf").unwrap();
     let mut status_text = sfml::graphics::Text::new("Thinking...", &font, 16);
 
-    let mut stop_sender: Option<SyncSender<()>> = None;
-
     let mut last_move: Option<Move> = None;
 
-    let compute_move = |board: &Board, tx: SyncSender<Option<Move>>| {
-        let mut board = board.clone();
-        let (tx_stop, rx_stop) = sync_channel(1);
+    let mut thread_board = board.clone();
 
-        let thread = std::thread::spawn(move || {
-            if let Some(m) = board.find_best_move(6, rx_stop) {
-                tx.send(Some(m));
+    let (tx_command, rx_command) = sync_channel::<Command>(1);
+    let (tx_result, rx_result) = sync_channel::<Response>(1);
+
+    std::thread::spawn(move || {
+        loop {
+            if let Ok(cmd)= rx_command.recv() {
+                match cmd {
+                    Command::Stop => return,
+                    Command::MakeMove(m) => {
+                        println!("Received: {:?}", m);
+                        thread_board.make_move_root(m);
+                        thread_board.push_move(m);
+                        tx_result.send(Response::Ack);
+                    }
+                    Command::Undo => {
+                        thread_board.pop_move();
+                        tx_result.send(Response::Ack);
+                    }
+                    Command::Compute => {
+                        println!("Received Compute");
+                        let m = thread_board.find_best_move(8, &rx_command);
+                        if let Some(m) = m {
+                            tx_result.send(Response::FoundMove(m));
+                        } else {
+                            tx_result.send(Response::NoValidMove);
+                        }
+                    }
+                }
             } else {
-                // println!("No valid move found");
-                tx.send(None);
+                break;
             }
-        });
+        }
+    });
 
-        return tx_stop;
-    };
-
-    let mut do_compute = false;
     let mut legal_moves = Vec::new();
+    let mut computing = false;
 
     while window.is_open() {
         while let Some(event) = window.poll_event() {
@@ -151,16 +171,12 @@ fn run_sfml_gui() {
                         if let Some(v) = selected {
                             if next != v {
                                 if let Some(m) = board.move_from_position(v.0 as i8, v.1 as i8, next.0 as i8, next.1 as i8) {
-                                    if legal_moves.contains(&m) {
-                                        last_move = Some(m);
-                                        board.push_move(m);
-                                        sound_move.play();
-                                        selected = None;
-                                        legal_moves.clear();
-                                    } else {
-                                        selected = None;
-                                        legal_moves.clear();
-                                    }
+                                    last_move = Some(m);
+                                    board.push_move(m);
+                                    tx_command.send(Command::MakeMove(m));
+                                    sound_move.play();
+                                    selected = None;
+                                    legal_moves.clear();
                                 } else {
                                     if let Some(piece) = board.piece_at(&Position::new(next.0 as i8, next.1 as i8)) {
                                         if piece.color == board.current_color() {
@@ -195,31 +211,28 @@ fn run_sfml_gui() {
                 Event::KeyPressed { code, alt, ctrl, shift, system } => {
                     if code == Key::LEFT {
                         board.pop_move();
+                        tx_command.send(Command::Undo);
                     } else if code == Key::SPACE {
-                        do_compute = true;
+                        tx_command.send(Command::Compute);
+                        computing = true;
                     }
                 }
                 _ => {}
             }
         }
 
-        let mut computing = false;
-
-        if let Some(sender) = &stop_sender {
-            if let Ok(m) = rx_result.try_recv() {
-                if let Some(m) = m {
+        if let Ok(response) = rx_result.try_recv() {
+            match response {
+                Response::Ack => {},
+                Response::FoundMove(m) => {
+                    computing = false;
                     board.push_move(m);
-                    sound_move.play();
-                    last_move = Some(m);
-                    stop_sender = None;
-                    // stop_sender = Some(compute_move(&board, tx_result.clone()));
+                    tx_command.send(Command::MakeMove(m));
                 }
-            } else {
-                computing = true;
+                Response::NoValidMove => {
+                    computing = false;
+                }
             }
-        } else if do_compute {
-            stop_sender = Some(compute_move(&board, tx_result.clone()));
-            do_compute = false;
         }
 
         window.clear(sfml::graphics::Color::rgb(0, 0, 0));
@@ -241,7 +254,7 @@ fn run_sfml_gui() {
 
         if let Some(m) = last_move {
             let pos = match m.action {
-                Action::Evaluation { .. } => None,
+                Action::NoAction => None,
                 Action::Move { from, to } => {
                     Some((from.position.x, from.position.y, to.position.x, to.position.y))
                 }
@@ -250,6 +263,12 @@ fn run_sfml_gui() {
                 }
                 Action::Promote { old_piece, new_piece } => {
                     Some((old_piece.position.x, old_piece.position.y, new_piece.position.x, new_piece.position.y))
+                }
+                Action::CastleQueenSide => {
+                    None
+                }
+                Action::CastleKingSide => {
+                    None
                 }
             };
 
@@ -306,10 +325,24 @@ fn run_sfml_gui() {
 
         for m in &legal_moves {
             let (x, y) = match m.action {
-                Action::Evaluation { .. } => { unreachable!() }
+                Action::NoAction  => { unreachable!() }
                 Action::Move { to, .. } => (to.position.x, to.position.y),
                 Action::Capture { target, .. } => (target.position.x, target.position.y),
-                Action::Promote { new_piece, .. } => (new_piece.position.x, new_piece.position.y)
+                Action::Promote { new_piece, .. } => (new_piece.position.x, new_piece.position.y),
+                Action::CastleKingSide => {
+                    if board.current_color() == Color::White {
+                        (6, 0)
+                    } else {
+                        (6, 7)
+                    }
+                }
+                Action::CastleQueenSide => {
+                    if board.current_color() == Color::White {
+                        (2, 0)
+                    } else {
+                        (2, 7)
+                    }
+                }
             };
             let px = x as f32 * 128.0;
             let py = (7 - y) as f32 * 128.0;

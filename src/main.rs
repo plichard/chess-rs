@@ -118,10 +118,12 @@ fn run_sfml_gui() {
 
     let mut last_move: Option<Move> = None;
 
+    let mut compute_start = std::time::Instant::now();
+
     let mut thread_board = board.clone();
 
-    let (tx_command, rx_command) = sync_channel::<Command>(1);
-    let (tx_result, rx_result) = sync_channel::<Response>(1);
+    let (tx_command, rx_command) = sync_channel::<Command>(0);
+    let (tx_result, rx_result) = sync_channel::<Response>(0);
 
     std::thread::spawn(move || {
         loop {
@@ -132,19 +134,22 @@ fn run_sfml_gui() {
                         println!("Received: {:?}", m);
                         thread_board.make_move_root(m);
                         thread_board.push_move(m);
-                        tx_result.send(Response::Ack);
+                        tx_result.send(Response::Ack).unwrap();
                     }
                     Command::Undo => {
                         thread_board.pop_move();
-                        tx_result.send(Response::Ack);
+                        tx_result.send(Response::Ack).unwrap();
                     }
                     Command::Compute => {
                         println!("Received Compute");
-                        let m = thread_board.find_best_move(8, &rx_command);
+                        let m = thread_board.find_best_move(15, &rx_command);
+                        println!("Compute result: {:?}", m);
                         if let Some(m) = m {
-                            tx_result.send(Response::FoundMove(m));
+                            println!("Sending...");
+                            tx_result.send(Response::FoundMove(m)).unwrap();
+                            println!("SENT");
                         } else {
-                            tx_result.send(Response::NoValidMove);
+                            tx_result.send(Response::NoValidMove).unwrap();
                         }
                     }
                 }
@@ -214,6 +219,7 @@ fn run_sfml_gui() {
                         tx_command.send(Command::Undo);
                     } else if code == Key::SPACE {
                         tx_command.send(Command::Compute);
+                        compute_start = std::time::Instant::now();
                         computing = true;
                     }
                 }
@@ -222,12 +228,15 @@ fn run_sfml_gui() {
         }
 
         if let Ok(response) = rx_result.try_recv() {
+            println!("Received: {:?}", response);
             match response {
                 Response::Ack => {},
                 Response::FoundMove(m) => {
+                    println!("Received move: {:?}", m);
                     computing = false;
                     board.push_move(m);
                     tx_command.send(Command::MakeMove(m));
+                    rx_result.recv();
                 }
                 Response::NoValidMove => {
                     computing = false;
@@ -357,6 +366,13 @@ fn run_sfml_gui() {
             status_text.set_character_size(42);
             status_text.set_fill_color(sfml::graphics::Color::rgb(50, 255, 50));
             window.draw(&status_text);
+
+            if compute_start.elapsed().as_secs_f32() > 3.0 {
+                println!("Reached 1 seconds, interrupting");
+                computing = false;
+                tx_command.send(Command::Stop).unwrap();
+            //     rx_result.recv();
+            }
         }
 
         window.display();

@@ -135,7 +135,7 @@ impl Cell {
     }
 }
 
-
+#[derive(Debug)]
 pub enum Command {
     Stop,
     MakeMove(Move),
@@ -143,6 +143,7 @@ pub enum Command {
     Compute
 }
 
+#[derive(Debug)]
 pub enum Response {
     Ack,
     FoundMove(Move),
@@ -176,6 +177,7 @@ pub struct Board {
     black_queen_rook_move_count: i32,
 
     root_node: Option<MoveNode>,
+    should_stop: bool
 }
 
 impl Board {
@@ -208,7 +210,8 @@ impl Board {
             black_king_rook_move_count: 0,
             black_queen_rook_move_count: 0,
 
-            root_node: Some(Move{ score: 0, action: Action::NoAction }.into())
+            root_node: Some(Move{ score: 0, action: Action::NoAction }.into()),
+            should_stop: false
         }
     }
 
@@ -434,6 +437,8 @@ impl Board {
         }
         let mut root_node = self.root_node.take().unwrap();
 
+        self.should_stop = false;
+
         for i_depth in 1..depth {
             self.search(
                 i_depth,
@@ -443,6 +448,10 @@ impl Board {
                 false,
                 rx,
             );
+
+            if self.should_stop {
+                break;
+            }
         }
 
         let t2 = std::time::Instant::now();
@@ -451,6 +460,7 @@ impl Board {
         let mut best_score = -i16::MAX;
 
         for child in &root_node.children {
+            // println!("child: {:?}", child.m);
             if child.m.score > best_score {
                 best_score = child.m.score;
                 best_move = Some(child.m);
@@ -473,13 +483,13 @@ impl Board {
         rx: &Receiver<Command>,
     ) -> i16 {
         if rx.try_recv().is_ok() {
-            return self.evaluate_position();
+            self.should_stop = true;
         }
 
         if let Action::Capture { target, .. } = &parent.m.action {
             if target.t == Type::King {
                 return self.evaluate_position();
-            }
+            }   
         }
 
         if depth == 0 /*&& !only_captures */{
@@ -518,18 +528,20 @@ impl Board {
 
         for m in &mut parent.children {
             self.push_move(m.m);
-            let score = -self.search(depth - 1, -beta, -alpha, m, only_captures, &rx);
-            m.m.score = score;
+            if !self.should_stop {
+                let score = -self.search(depth - 1, -beta, -alpha, m, only_captures, &rx);
+                m.m.score = score;
+            }
             // println!("test move: {}", test_move.evaluation);
             self.pop_move();
 
-            if score >= beta {
+            if m.m.score >= beta {
                 // println!("Pruning");
                 return beta;
             }
 
-            if score > alpha {
-                alpha = score;
+            if m.m.score > alpha {
+                alpha = m.m.score;
             }
         }
 

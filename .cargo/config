@@ -1,0 +1,2 @@
+[target.nightly-x86_64-pc-windows-msvc.sfml]
+rustc-link-search = ["C:/dev/libs/CSFML-2.5.1-windows-64-bit/lib/msvc"]

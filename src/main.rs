@@ -47,7 +47,7 @@ fn run_sfml_gui() {
     let mut settings = sfml::window::ContextSettings::default();
     settings.set_antialiasing_level(4);
 
-    let mut window = sfml::graphics::RenderWindow::new((800, 800), "Chess", Style::DEFAULT, &settings);
+    let mut window = sfml::graphics::RenderWindow::new((300, 300), "Chess", Style::DEFAULT, &settings);
 
     window.set_vertical_sync_enabled(true);
 
@@ -142,7 +142,7 @@ fn run_sfml_gui() {
                     }
                     Command::Compute => {
                         println!("Received Compute");
-                        let m = thread_board.find_best_move(15, &rx_command);
+                        let m = thread_board.find_best_move(8, &rx_command);
                         println!("Compute result: {:?}", m);
                         if let Some(m) = m {
                             println!("Sending...");

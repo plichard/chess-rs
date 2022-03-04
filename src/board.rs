@@ -506,7 +506,7 @@ impl Board {
         //     return self.evaluate_position();
         // }
 
-        if !parent.visited {
+        if !parent.visited && !self.should_stop {
             parent.children = self.collect_all_moves(self.current_color(), only_captures, false);
             parent.visited = true;
         }
@@ -528,12 +528,13 @@ impl Board {
 
         for m in &mut parent.children {
             self.push_move(m.m);
-            if !self.should_stop {
-                let score = -self.search(depth - 1, -beta, -alpha, m, only_captures, &rx);
-                m.m.score = score;
-            }
-            // println!("test move: {}", test_move.evaluation);
+            let score = -self.search(depth - 1, -beta, -alpha, m, only_captures, &rx);
             self.pop_move();
+
+            m.m.score = score;            
+            
+            // println!("test move: {}", test_move.evaluation);
+           
 
             if m.m.score >= beta {
                 // println!("Pruning");

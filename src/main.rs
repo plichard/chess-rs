@@ -47,7 +47,7 @@ fn run_sfml_gui() {
     let mut settings = sfml::window::ContextSettings::default();
     settings.set_antialiasing_level(4);
 
-    let mut window = sfml::graphics::RenderWindow::new((300, 300), "Chess", Style::DEFAULT, &settings);
+    let mut window = sfml::graphics::RenderWindow::new((800, 800), "Chess", Style::DEFAULT, &settings);
 
     window.set_vertical_sync_enabled(true);
 
@@ -124,6 +124,8 @@ fn run_sfml_gui() {
 
     let (tx_command, rx_command) = sync_channel::<Command>(0);
     let (tx_result, rx_result) = sync_channel::<Response>(0);
+
+    let some_value: u128 = 42;
 
     std::thread::spawn(move || {
         loop {
@@ -217,6 +219,11 @@ fn run_sfml_gui() {
                     if code == Key::LEFT {
                         board.pop_move();
                         tx_command.send(Command::Undo);
+                        if let Some(m) = board.last_move() {
+                            last_move = Some(m);
+                        } else {
+                            last_move = None;
+                        }
                     } else if code == Key::SPACE {
                         tx_command.send(Command::Compute);
                         compute_start = std::time::Instant::now();
@@ -236,6 +243,8 @@ fn run_sfml_gui() {
                     computing = false;
                     board.push_move(m);
                     tx_command.send(Command::MakeMove(m));
+                    last_move = Some(m);
+                    sound_move.play();
                     rx_result.recv();
                 }
                 Response::NoValidMove => {

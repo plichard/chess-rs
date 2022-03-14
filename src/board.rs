@@ -177,7 +177,11 @@ pub struct Board {
     black_queen_rook_move_count: i32,
 
     root_node: Option<MoveNode>,
-    should_stop: bool
+    should_stop: bool,
+
+
+    // stats
+    evaluate_position_calls: u64
 }
 
 impl Board {
@@ -211,7 +215,9 @@ impl Board {
             black_queen_rook_move_count: 0,
 
             root_node: Some(Move{ score: 0, action: Action::NoAction }.into()),
-            should_stop: false
+            should_stop: false,
+
+            evaluate_position_calls: 0,
         }
     }
 
@@ -438,6 +444,7 @@ impl Board {
         let mut root_node = self.root_node.take().unwrap();
 
         self.should_stop = false;
+        self.evaluate_position_calls = 0;
 
         for i_depth in 1..depth {
             self.search(
@@ -469,7 +476,7 @@ impl Board {
 
         self.root_node = Some(root_node);
 
-        println!("score = {}, move count = {}, time = {:?}", best_score, self.move_count, t2 - t1);
+        println!("score = {}, move count = {}, positions = {}, time = {:?}", best_score, self.move_count, self.evaluate_position_calls, t2 - t1);
         return best_move;
     }
 
@@ -570,6 +577,7 @@ impl Board {
     }
 
     pub fn evaluate_position(&mut self) -> i16 {
+        self.evaluate_position_calls += 1;
         // self.compute_attacked_cells();
         let mut black_value = {
             let mut sum: i16 = 0;
@@ -1380,6 +1388,10 @@ impl Board {
     pub fn pop_move(&mut self) {
         let m = self.move_stack.pop().unwrap();
         self.unmake_move(m);
+    }
+
+    pub fn last_move(&self) -> Option<Move> {
+        self.move_stack.last().and_then(|v| Some(*v))
     }
 
     pub fn print_attacked_cells(&self) {

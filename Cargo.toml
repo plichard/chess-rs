@@ -20,3 +20,6 @@ sfml = "0.16.0"
 
 #[lib]
 #crate-type = ["cdylib"]
+
+[profile.release]
+debug = false

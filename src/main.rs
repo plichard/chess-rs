@@ -28,6 +28,7 @@ mod board;
 mod piece;
 // mod slotvec;
 mod utils;
+
 use board::{Command, Response};
 
 
@@ -77,8 +78,8 @@ fn run_sfml_gui() {
     black_square.set_fill_color(sfml::graphics::Color::rgb(50, 50, 50));
 
     for tex in [&mut w_pawn_tex, &mut b_pawn_tex, &mut w_rook_tex, &mut b_rook_tex,
-        &mut w_knight_tex, &mut b_knight_tex, &mut w_bishop_tex, &mut b_bishop_tex, &mut w_queen_tex, &mut b_queen_tex,
-        &mut w_king_tex, &mut b_king_tex] {
+        &mut w_knight_tex, &mut b_knight_tex, &mut w_bishop_tex, &mut b_bishop_tex,
+        &mut w_queen_tex, &mut b_queen_tex, &mut w_king_tex, &mut b_king_tex] {
         tex.set_smooth(true);
     }
 
@@ -129,7 +130,7 @@ fn run_sfml_gui() {
 
     std::thread::spawn(move || {
         loop {
-            if let Ok(cmd)= rx_command.recv() {
+            if let Ok(cmd) = rx_command.recv() {
                 match cmd {
                     Command::Stop => return,
                     Command::MakeMove(m) => {
@@ -144,7 +145,7 @@ fn run_sfml_gui() {
                     }
                     Command::Compute => {
                         println!("Received Compute");
-                        let m = thread_board.find_best_move(8, &rx_command);
+                        let m = thread_board.find_best_move(6, &rx_command);
                         println!("Compute result: {:?}", m);
                         if let Some(m) = m {
                             println!("Sending...");
@@ -237,7 +238,7 @@ fn run_sfml_gui() {
         if let Ok(response) = rx_result.try_recv() {
             println!("Received: {:?}", response);
             match response {
-                Response::Ack => {},
+                Response::Ack => {}
                 Response::FoundMove(m) => {
                     println!("Received move: {:?}", m);
                     computing = false;
@@ -343,7 +344,7 @@ fn run_sfml_gui() {
 
         for m in &legal_moves {
             let (x, y) = match m.action {
-                Action::NoAction  => { unreachable!() }
+                Action::NoAction => { unreachable!() }
                 Action::Move { to, .. } => (to.position.x, to.position.y),
                 Action::Capture { target, .. } => (target.position.x, target.position.y),
                 Action::Promote { new_piece, .. } => (new_piece.position.x, new_piece.position.y),
@@ -376,12 +377,12 @@ fn run_sfml_gui() {
             status_text.set_fill_color(sfml::graphics::Color::rgb(50, 255, 50));
             window.draw(&status_text);
 
-            if compute_start.elapsed().as_secs_f32() > 3.0 {
-                println!("Reached 1 seconds, interrupting");
-                computing = false;
-                tx_command.send(Command::Stop).unwrap();
-            //     rx_result.recv();
-            }
+            // if compute_start.elapsed().as_secs_f32() > 3.0 {
+            //     println!("Reached 3 seconds, interrupting");
+            //     computing = false;
+            //     //tx_command.send(Command::Stop).unwrap();
+            //     //     rx_result.recv();
+            // }
         }
 
         window.display();
